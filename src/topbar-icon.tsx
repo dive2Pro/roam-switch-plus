@@ -1,23 +1,34 @@
-import { Button, Dialog } from "@blueprintjs/core";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactDom from "react-dom";
 import Extension from "./extension";
+import { Button, Dialog } from "@blueprintjs/core";
 
 import { appendToTopbar, extension_helper } from "./helper";
 
+function Path() {
+  const ref = useRef()
+  useEffect(() => {
+    // @ts-ignore
+    window.roamAlphaAPI.ui.components.renderBlock({ el: ref.current, uid: 'p-u0jAL_i', 'zoom-path?': true })
+  }, [])
+  return < div ref={ref} />
+}
 function TopbarIcon() {
   const [open, setOpen] = useState(false);
+
+
   return (
     <>
       <Button
-        icon="add"
+        icon="switch"
         onClick={() => {
           setOpen((prev) => !prev);
         }}
       />
-      <Dialog onClose={() => setOpen((prev) => !prev)} isOpen={open}>
-        <Extension />
-      </Dialog>
+      <Extension isOpen={open} onClose={() => setOpen(false)} />
+      {/* <Dialog isOpen={open} onClose={() => setOpen(false)}>
+        <Path />
+      </Dialog> */}
     </>
   );
 }
