@@ -1,20 +1,43 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MenuItem, } from "@blueprintjs/core";
+import { MenuItem, Tag, } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar, OmnibarProps } from "@blueprintjs/select";
 import getFullTreeByParentUid from 'roamjs-components/queries/getFullTreeByParentUid';
 
 import "./style.less";
-import { TreeNode } from "roamjs-components/types";
+import { RoamBlock, TreeNode } from "roamjs-components/types";
 
 
-type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[] }
+type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], refs?: { id: number }[] }
+type TreeNode3 = Omit<TreeNode2, 'refs'> & { refs: string[] }
 
 let oldHref = ''
 let startTime = Date.now();
 const api = {
+  getAllTaggedBlocks() {
+    window.roamAlphaAPI.q(`
+[
+    :find (pull ?children [*])
+    :where
+      [?p :block/uid "02-22-2023"]
+      [?children :block/page ?p]
+      [?children :block/refs ?refs]
+]
+`)
+  },
   getCurrentPageFullTreeByUid(uid: string) {
-    return (
-      getFullTreeByParentUid(uid))
+    return window.roamAlphaAPI.q(`[:find (pull ?b [
+      [:block/string :as "text"]
+      :block/uid 
+      :block/order 
+      :block/heading 
+      :block/refs
+      :block/open 
+      [:children/view-type :as "viewType"] 
+      [:block/text-align :as "textAlign"] 
+      [:edit/time :as "editTime"] 
+      :block/props 
+      {:block/children ...}
+    ]) . :where [?b :block/uid "${uid}"]]`) as unknown as TreeNode2
   },
   recordPageAndScrollPosition() {
     oldHref = location.href;
@@ -95,7 +118,8 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
   });
   const [sources, setSources] = useState<{
     'lineMode': Map<string, TreeNode>,
-    'strMode': TreeNode[]
+    'strMode': TreeNode[],
+    'tagMode': TreeNode3[]
   }>();
 
   // 记录当前网址和滑动的距离
@@ -135,9 +159,37 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
         },
       }
     },
-    // "@": (str) => {
-    //   // 切换
-    // },
+    "@": (str) => {
+
+      return {
+        itemPredicate(query, item: TreeNode3) {
+          return item.refs.some(ref => ref.toLowerCase().includes(str.toLowerCase()));
+        },
+        items: (_sources: typeof sources) => _sources.tagMode,
+        itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
+          // console.log(item, ' = render', itemProps)
+          return <MenuItem className={`switch-result-item 
+                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
+                               `
+          }
+            {...itemProps.modifiers}
+            text={
+              <div>
+                {
+                  item.refs.map(ref => {
+                    return <span className="rm-page-ref--tag">{highlightText(ref, str)}</span> 
+                  })}
+                <small>
+                  {item.text}
+                </small>
+              </div>
+            }
+            onClick={itemProps.handleClick}>
+          </MenuItem>
+        }
+
+      }
+    },
     // "#": (str) => { },
     "s:": defaultFn
   }
@@ -156,10 +208,12 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
       ]`) as unknown as string) || pageOrBlockUid;
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode2, []));
     const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid))
-    // console.log(flatted ,' -@', pageUid, pageOrBlockUid)
+    console.log(flatted, ' -@', pageUid, pageOrBlockUid)
+
     setSources({
       lineMode: flatted[0],
-      strMode: flatted[1]
+      strMode: flatted[1],
+      tagMode: flatted[2]
     });
     // 默认
     setPassProps(defaultFn(""));
@@ -199,13 +253,19 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
         {...passProps}
         items={passProps.items(sources)}
         onQueryChange={(query) => {
-          const tag = query.substring(0, 1);
+          const usedMode = Object.keys(modes).find(mode => {
+            if (query.startsWith(mode)) {
+              return true;
+            }
+            return false;
+          })
+          const tag = usedMode;
           const fn = modes[tag] || defaultFn;
-          const str = modes[tag] ? query.substring(1) : query;
-          setPassProps(fn(str));
+          const str = modes[tag] ? query.substring(tag.length) : query;
+          setPassProps(fn(str.trim()));
         }}
         onActiveItemChange={(activeItem: TreeNode) => {
-          console.log(activeItem, ' ---- ', props.isOpen);
+          // console.log(activeItem, ' ---- ', props.isOpen);
           if (!activeItem || selected.current) {
             return
           }
@@ -233,14 +293,45 @@ function withParents(node: TreeNode2, parentIds: string[]) {
 }
 
 
-function flatTree(node: TreeNode) {
-  const lineMode = new Map<string, TreeNode>();
-  const blocks: TreeNode[] = []
+function flatTree(node: TreeNode2) {
+  console.log(node, ' = node')
+  const lineMode = new Map<string, TreeNode2>();
+  const blocks: TreeNode2[] = []
+  const taggedBlocks: TreeNode3[] = []
 
-  const flat = (_node: TreeNode, deep: string) => {
+  const flat = (_node: TreeNode2, deep: string) => {
     lineMode.set(deep, _node);
     blocks.push(_node);
-    _node.children.forEach((childNode, index) => {
+    if (_node.refs) {
+      const replacedString = replaceBlockReference(_node.text);
+      _node.text = replacedString;
+      taggedBlocks.push({
+        ..._node,
+        refs: _node.refs.map(ref => {
+          const refStr = window.roamAlphaAPI.q(`
+        [
+          :find ?t .
+          :in $ ?ref
+          :where
+            [?ref :node/title ?t]
+        ]
+        `, ref.id)
+            ||
+            window.roamAlphaAPI.q(`
+        [
+          :find ?t .
+          :in $ ?ref
+          :where
+            [?ref :block/string ?t]
+        ]
+        `, ref.id);
+          console.log(ref.id, ' -- ', refStr)
+
+          return refStr as unknown as string;
+        })
+      })
+    }
+    _node.children?.forEach((childNode, index) => {
       flat(childNode, deep + '.' + (index + 1))
     })
   }
@@ -248,5 +339,41 @@ function flatTree(node: TreeNode) {
   node.children.forEach((childNode, index) => {
     flat(childNode, (index + 1) + '')
   })
-  return [lineMode, blocks] as const;
+  return [lineMode, blocks, taggedBlocks] as const;
+}
+
+
+
+export function replaceBlockReference(source: string) {
+  const refReg = /(\(\((.{9,})\)\))/gi;
+  let lastIndex = 0;
+  let result = "";
+  while (true) {
+    const match = refReg.exec(source);
+    if (!match) {
+      break;
+    }
+    const length = match[0].length;
+    const before = source.slice(lastIndex, refReg.lastIndex - length);
+    if (before.length > 0) {
+      result += before;
+    }
+    lastIndex = refReg.lastIndex;
+    // console.log(match, result, lastIndex, source);
+    result += getRefStringByUid(match[2]);
+  }
+  // console.log(source, " -- source");
+  const rest = source.slice(lastIndex);
+  if (rest) {
+    result += rest;
+  }
+  return result;
+}
+
+function getRefStringByUid(uid: string) {
+  const block = window.roamAlphaAPI.pull("[:block/string]", [
+    ":block/uid",
+    uid,
+  ]);
+  return block ? block[":block/string"] : "";
 }
