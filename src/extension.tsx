@@ -11,7 +11,7 @@ import { RoamBlock, TreeNode } from "roamjs-components/types";
 const delay = (ms?: number) => new Promise(resolve => {
   setTimeout(resolve, ms)
 })
-type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], refs?: { id: number }[] }
+type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], deep: string, refs?: { id: number }[] }
 type TreeNode3 = Omit<TreeNode2, 'refs'> & { refs: { type: 'page' | 'block', text: string }[] }
 
 let oldHref = ''
@@ -33,7 +33,7 @@ const api = {
         uid: newUid,
       },
       location: {
-        "parent-uid":parentUid,
+        "parent-uid": parentUid,
         order: order
       }
     })
@@ -178,7 +178,6 @@ const RightMenu: FC<{
   return <div className="right-menu">
     <ButtonGroup>
       <Tooltip
-        position="top"
         content={
           <span>Insert a block above</span>
         }>
@@ -186,14 +185,12 @@ const RightMenu: FC<{
       </Tooltip>
 
       <Tooltip
-        position="top"
         content={
           <span>Insert a block below</span>
         }>
         <Button icon="add-row-bottom" onClick={e => props.onClick('bottom', e)} />
       </Tooltip>
       <Tooltip
-        position="top"
         content={
           <span>Open in sidebar</span>
         }>
@@ -240,6 +237,19 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         }, 100)
       },
     })
+    props.extensionAPI.ui.commandPalette.addCommand({
+      label: 'Open Switch+ in Line Mode',
+      "default-hotkey": ['super-shift-l'],
+      async callback() {
+        if (!isOpen) {
+          await initData()
+        }
+        setOpen(prev => !prev)
+        setTimeout(() => {
+          setQuery(":")
+        }, 100)
+      },
+    })
   }, [])
   const [passProps, setPassProps] = useState<PassProps>({
     items: () => [],
@@ -247,8 +257,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     onItemSelect: () => { },
   });
   const [sources, setSources] = useState<{
-    'lineMode': Map<string, TreeNode>,
-    'strMode': TreeNode[],
+    'lineMode': TreeNode2[],
+    'strMode': TreeNode2[],
     'tagMode': TreeNode3[]
   }>();
   type OnRightMenuClick2 = (item: { uid: string, order: number }, type: "top" | 'right' | 'bottom', e: React.MouseEvent<HTMLElement>) => void;
@@ -314,13 +324,30 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const modes: Record<string, (str: string) => PassProps> = {
     ":": (str) => {
+      console.log(str, ' line mode', sources.lineMode)
       return {
-        itemPredicate(query, item) {
-          return true;
+        itemPredicate(query: string, item: TreeNode2) {
+          return item.deep.startsWith(str) || item.deep.split(".").join("").startsWith(str);
         },
-        items: () => [],
-        itemRenderer(item) {
-          return <></>
+        items: (_sources: typeof sources) => _sources.lineMode,
+        itemRenderer: (item: TreeNode2, itemProps: IItemRendererProps) => {
+          return <MenuItem
+            {...itemProps.modifiers}
+            text={
+              <div
+                className={`switch-result-item 
+                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
+                               `} >
+
+                <div className="deep">
+                  {highlightText(item.deep, str)}
+                </div>
+                {item.text}
+                <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
+              </div>
+            }
+            onClick={itemProps.handleClick}>
+          </MenuItem>
         }
       }
     },
@@ -379,7 +406,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     console.log(flatted, ' -@', pageUid, pageOrBlockUid)
 
     setSources({
-      lineMode: flatted[0],
+      lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
       tagMode: flatted[2].filter(item => item.text)
     });
@@ -488,12 +515,13 @@ export function initExtension(extensionAPI: RoamExtensionAPI) {
 
 function flatTree(node: TreeNode2) {
   console.log(node, ' = node')
-  const lineMode = new Map<string, TreeNode2>();
+  const lineBlocks: TreeNode2[] = [];
   const blocks: TreeNode2[] = []
   const taggedBlocks: TreeNode3[] = []
 
   const flat = (_node: TreeNode2, deep: string, deepInt: number) => {
-    lineMode.set(deep, _node);
+    // lineMode.set(deep, _node);
+    _node.deep = deep;
     blocks.push(_node);
     if (_node.refs) {
       const replacedString = replaceBlockReference(_node.text);
@@ -536,7 +564,7 @@ function flatTree(node: TreeNode2) {
   node.children.forEach((childNode, index) => {
     flat(childNode, (index + 1) + '', 0)
   })
-  return [lineMode, blocks, taggedBlocks] as const;
+  return [lineBlocks, blocks, taggedBlocks] as const;
 }
 
 
