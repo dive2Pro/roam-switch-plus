@@ -8,7 +8,7 @@ import { RoamBlock, TreeNode } from "roamjs-components/types";
 
 
 type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], refs?: { id: number }[] }
-type TreeNode3 = Omit<TreeNode2, 'refs'> & { refs: string[] }
+type TreeNode3 = Omit<TreeNode2, 'refs'> & { refs: { type: 'page' | 'block', text: string }[] }
 
 let oldHref = ''
 let startTime = Date.now();
@@ -43,25 +43,37 @@ const api = {
     oldHref = location.href;
   },
   restorePageAndScrollPosition() {
-    history.go(-1);
+    // history.go(-1);
+    // setTimeout(() => {
+    //   window.roamAlphaAPI.ui.mainWindow
+    //     .openBlock({
+    //       block:
+    //         { uid: oldHref.split("/").pop() }
+    //     })
+    // }, 5)
     setTimeout(() => {
-      window.roamAlphaAPI.ui.mainWindow
-        .openBlock({
-          block:
-            { uid: oldHref.split("/").pop() }
-        })
-    }, 5)
+      location.replace(oldHref);
+    })
 
   },
   focusOnBlockWithoughtHistory(uid: string) {
-    history.go(-1);
+    // history.go(-1);
+    // setTimeout(() => {
+    //   window.roamAlphaAPI.ui.mainWindow
+    //     .openBlock({
+    //       block:
+    //         { uid: uid }
+    //     })
+    // }, 5)
+    const hashes = location.hash.split("/")
+    hashes.pop();
+    hashes.push(uid);
+    const newHash = hashes.join("/");
+    var newUrl = location.origin + newHash;
+    console.log(newUrl, ' newUrl');
     setTimeout(() => {
-      window.roamAlphaAPI.ui.mainWindow
-        .openBlock({
-          block:
-            { uid: uid }
-        })
-    }, 5)
+      location.replace(newUrl);
+    })
   },
 }
 
@@ -110,8 +122,6 @@ type PassProps = {
 
 
 export default function Extension(props: { isOpen: boolean, onClose: () => void }) {
-  const [tree, setTree] = useState<TreeNode2>();
-  const [items, setItems] = useState([]);
   const [passProps, setPassProps] = useState<PassProps>({
     items: () => [],
     itemRenderer: () => <></>,
@@ -163,23 +173,25 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
 
       return {
         itemPredicate(query, item: TreeNode3) {
-          return item.refs.some(ref => ref.toLowerCase().includes(str.toLowerCase()));
+          return item.refs.some(ref => ref.text.toLowerCase().includes(str.toLowerCase()));
         },
         items: (_sources: typeof sources) => _sources.tagMode,
         itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
           // console.log(item, ' = render', itemProps)
-          return <MenuItem className={`switch-result-item 
-                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
-                               `
-          }
+          return <MenuItem
             {...itemProps.modifiers}
             text={
-              <div>
+              <div
+                className={`switch-result-item 
+                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
+                               `} >
                 {
                   item.refs.map(ref => {
-                    return <span className="rm-page-ref--tag">{highlightText(ref, str)}</span> 
+                    return <Tag
+                      icon={ref.type === 'page' ? 'git-new-branch' : 'new-link'}
+                      className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
                   })}
-                <small>
+                <small className="ellipsis">
                   {item.text}
                 </small>
               </div>
@@ -235,9 +247,11 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
     selected.current = false;
   }, [props.isOpen])
   const selected = useRef(false)
+  const [query, setQuery] = useState("")
   return (
-    <div className="rm-switchs">
+    <div >
       <Omnibar
+        className="rm-switchs"
         {...props}
         onClose={() => {
           // api.clearHistory
@@ -245,6 +259,10 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
             api.restorePageAndScrollPosition()
           }
           props.onClose();
+          setTimeout(() => {
+            setQuery("")
+          }, 20)
+
         }}
         onItemSelect={() => {
           selected.current = true;
@@ -253,6 +271,9 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
         {...passProps}
         items={passProps.items(sources)}
         onQueryChange={(query) => {
+          if (!query) {
+            return;
+          }
           const usedMode = Object.keys(modes).find(mode => {
             if (query.startsWith(mode)) {
               return true;
@@ -263,16 +284,18 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
           const fn = modes[tag] || defaultFn;
           const str = modes[tag] ? query.substring(tag.length) : query;
           setPassProps(fn(str.trim()));
+          setQuery(query)
         }}
         onActiveItemChange={(activeItem: TreeNode) => {
           // console.log(activeItem, ' ---- ', props.isOpen);
-          if (!activeItem || selected.current) {
+          if (!activeItem || selected.current || !query) {
             return
           }
           api.focusOnBlockWithoughtHistory(activeItem.uid)
         }}
         resetOnQuery
         resetOnSelect
+        query={query}
         noResults={<MenuItem disabled={true} text="No results." />}
       />
     </div>
@@ -308,15 +331,21 @@ function flatTree(node: TreeNode2) {
       taggedBlocks.push({
         ..._node,
         refs: _node.refs.map(ref => {
-          const refStr = window.roamAlphaAPI.q(`
+          const pageStr = window.roamAlphaAPI.q(`
         [
           :find ?t .
           :in $ ?ref
           :where
             [?ref :node/title ?t]
         ]
-        `, ref.id)
-            ||
+        `, ref.id) as unknown as string;
+          if (pageStr) {
+            return {
+              text: pageStr,
+              type: 'page'
+            }
+          }
+          const refStr =
             window.roamAlphaAPI.q(`
         [
           :find ?t .
@@ -325,9 +354,7 @@ function flatTree(node: TreeNode2) {
             [?ref :block/string ?t]
         ]
         `, ref.id);
-          console.log(ref.id, ' -- ', refStr)
-
-          return refStr as unknown as string;
+          return { text: refStr as unknown as string, type: 'block' }
         })
       })
     }
