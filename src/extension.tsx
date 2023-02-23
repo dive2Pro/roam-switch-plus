@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MenuItem, Tag, } from "@blueprintjs/core";
+import ReactDOM from 'react-dom';
+import { Menu, MenuItem, Tag, } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar, OmnibarProps } from "@blueprintjs/select";
 import getFullTreeByParentUid from 'roamjs-components/queries/getFullTreeByParentUid';
 
@@ -122,6 +123,41 @@ type PassProps = {
 
 
 export default function Extension(props: { isOpen: boolean, onClose: () => void }) {
+
+}
+
+function App(props: { extensionAPI: RoamExtensionAPI }) {
+  const [isOpen, setOpen] = useState(false);
+
+  const initData = async () => {
+    api.recordPageAndScrollPosition();
+    await onRouteChange();
+  }
+  useEffect(() => {
+    props.extensionAPI.ui.commandPalette.addCommand({
+      label: 'Open Switch+',
+      "default-hotkey": ['super-shift-p'],
+      async callback() {
+        if (!isOpen)
+          await initData()
+        setOpen(prev => !prev)
+
+      },
+    })
+    props.extensionAPI.ui.commandPalette.addCommand({
+      label: 'Open Switch+ in Tag Mode',
+      "default-hotkey": ['super-shift-o'],
+      async callback() {
+        if (!isOpen) {
+          await initData()
+        }
+        setOpen(prev => !prev)
+        setTimeout(() => {
+          setQuery("@")
+        }, 100)
+      },
+    })
+  }, [])
   const [passProps, setPassProps] = useState<PassProps>({
     items: () => [],
     itemRenderer: () => <></>,
@@ -140,6 +176,9 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
       items: (_sources: typeof sources) => _sources.strMode,
       itemPredicate: (query: string, item: TreeNode) => {
         // console.log(item, ' ---- ', str ? 1 : 2, query)
+        if (!query) {
+          return true;
+        }
         return str ? item.text.toLowerCase().includes(str.toLowerCase()) : false;
       },
       itemRenderer: (item: TreeNode, itemProps: IItemRendererProps) => {
@@ -177,7 +216,7 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
         },
         items: (_sources: typeof sources) => _sources.tagMode,
         itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
-          // console.log(item, ' = render', itemProps)
+          console.log(item, ' = render', itemProps)
           return <MenuItem
             {...itemProps.modifiers}
             text={
@@ -208,7 +247,7 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
   const onRouteChange = async () => {
     const pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
     if (!pageOrBlockUid) {
-      return;
+      throw new Error("Not in a page")
     }
 
     const pageUid = (window.roamAlphaAPI.q(`[
@@ -229,7 +268,6 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
     });
     // 默认
     setPassProps(defaultFn(""));
-
   }
   // useEffect(() => {
 
@@ -240,25 +278,24 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
   // }, [])
 
   useEffect(() => {
-    if (props.isOpen) {
-      api.recordPageAndScrollPosition();
-      onRouteChange();
-    }
     selected.current = false;
-  }, [props.isOpen])
+  }, [isOpen])
   const selected = useRef(false)
   const [query, setQuery] = useState("")
+  const handleClose = () => {
+    setOpen(false)
+  }
   return (
     <div >
       <Omnibar
         className="rm-switchs"
-        {...props}
+        isOpen={isOpen}
         onClose={() => {
           // api.clearHistory
           if (!selected.current) {
             api.restorePageAndScrollPosition()
           }
-          props.onClose();
+          handleClose();
           setTimeout(() => {
             setQuery("")
           }, 20)
@@ -266,14 +303,11 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
         }}
         onItemSelect={() => {
           selected.current = true;
-          props.onClose();
+          handleClose();
         }}
         {...passProps}
         items={passProps.items(sources)}
         onQueryChange={(query) => {
-          if (!query) {
-            return;
-          }
           const usedMode = Object.keys(modes).find(mode => {
             if (query.startsWith(mode)) {
               return true;
@@ -288,7 +322,7 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
         }}
         onActiveItemChange={(activeItem: TreeNode) => {
           // console.log(activeItem, ' ---- ', props.isOpen);
-          if (!activeItem || selected.current || !query) {
+          if (!activeItem || selected.current) {
             return
           }
           api.focusOnBlockWithoughtHistory(activeItem.uid)
@@ -297,22 +331,30 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
         resetOnSelect
         query={query}
         noResults={<MenuItem disabled={true} text="No results." />}
+        itemListRenderer={(itemListProps) => {
+          // @ts-ignore
+          return <Menu {...itemListProps.menuProps}>
+            {itemListProps.filteredItems.map((item, index) => {
+              return itemListProps.renderItem(item, index)
+            })}
+          </Menu>
+        }}
       />
     </div>
   );
 }
 
-export function initExtension() {
-  console.log("init extension");
-}
-
-
-function withParents(node: TreeNode2, parentIds: string[]) {
-  node.parents = parentIds;
-  node.children = node.children.map(child => {
-    return withParents(child as TreeNode2, [...parentIds, node.uid])
-  })
-  return node;
+const ID = "rm-switches"
+export function initExtension(extensionAPI: RoamExtensionAPI) {
+  let roamEl = document.querySelector(".roam-app");
+  let el = document.querySelector("#" + ID)
+  if (el) {
+    el.parentElement.removeChild(el);
+  }
+  el = document.createElement("div");
+  el.id = ID;
+  roamEl.appendChild(el);
+  ReactDOM.render(<App extensionAPI={extensionAPI} />, el);
 }
 
 
