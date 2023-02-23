@@ -18,27 +18,28 @@ let oldHref = ''
 const api = {
   async insertBlockByUid(uid: string, order: number) {
     const newUid = window.roamAlphaAPI.util.generateUID();
-    const parentUid = window.roamAlphaAPI.q(`[
+    const parentUids = window.roamAlphaAPI.q(`[
           :find [?e ...]
           :where
             [?b :block/uid "${uid}"]
             [?b :block/parents ?parents]
             [?parents :block/uid ?e]
         ]`) as unknown as string[];
-    console.log(parentUid, newUid, order, uid)
+    const parentUid = parentUids.pop();
+    // console.log(parentUid, newUid, order, uid)
     await window.roamAlphaAPI.createBlock({
       block: {
         string: '',
         uid: newUid,
       },
       location: {
-        "parent-uid": parentUid.pop(),
+        "parent-uid":parentUid,
         order: order
       }
     })
     return { newUid, parentUid };
   },
-  async selectingBlockByUid(uid: string, shiftKeyPressed: boolean) {
+  async selectingBlockByUid(uid: string, shiftKeyPressed: boolean, parentUid = uid) {
     if (shiftKeyPressed) {
       window.roamAlphaAPI.ui.rightSidebar
         .addWindow({
@@ -49,7 +50,7 @@ const api = {
     }
     await window.roamAlphaAPI.ui.mainWindow.openBlock({
       block: {
-        uid
+        uid: parentUid
       }
     })
     await delay(250)
@@ -177,6 +178,7 @@ const RightMenu: FC<{
   return <div className="right-menu">
     <ButtonGroup>
       <Tooltip
+        position="top"
         content={
           <span>Insert a block above</span>
         }>
@@ -184,12 +186,14 @@ const RightMenu: FC<{
       </Tooltip>
 
       <Tooltip
+        position="top"
         content={
           <span>Insert a block below</span>
         }>
         <Button icon="add-row-bottom" onClick={e => props.onClick('bottom', e)} />
       </Tooltip>
       <Tooltip
+        position="top"
         content={
           <span>Open in sidebar</span>
         }>
@@ -259,11 +263,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       },
       top: async () => {
         const newUid = await api.insertBlockByUid(item.uid, item.order)
-        api.selectingBlockByUid(newUid.newUid, e.shiftKey)
+        api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
       },
       bottom: async () => {
         const newUid = await api.insertBlockByUid(item.uid, item.order + 1)
-        api.selectingBlockByUid(newUid.newUid, e.shiftKey)
+        api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
       }
     }
     await handles[type]();
@@ -286,16 +290,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         // console.log(item, ' = render', itemProps)
         return <MenuItem
           style={{
-            paddingLeft: (item.parents?.length || 0) * 5
+            paddingLeft: (item.parents?.length || 0) * 10
           }}
           {...itemProps.modifiers}
           text={
             <div
               className={`switch-result-item ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}`}
             >
-              {
-                highlightText(item.text, str)
-              }
+              <span className="rm-bullet__inner" />
+              <div className="ellipsis">
+                {
+                  highlightText(item.text, str)
+                }
+              </div>
+
               <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
             </div>
           }
@@ -372,8 +380,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
     setSources({
       lineMode: flatted[0],
-      strMode: flatted[1],
-      tagMode: flatted[2]
+      strMode: flatted[1].filter(item => item.text),
+      tagMode: flatted[2].filter(item => item.text)
     });
     // 默认
     setPassProps(defaultFn(""));
