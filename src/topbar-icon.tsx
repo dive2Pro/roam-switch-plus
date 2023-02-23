@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import ReactDom from "react-dom";
-import Extension from "./extension";
 import { Button, Dialog } from "@blueprintjs/core";
 
 import { appendToTopbar, extension_helper } from "./helper";
@@ -25,7 +24,7 @@ function TopbarIcon() {
           setOpen((prev) => !prev);
         }}
       />
-      <Extension isOpen={open} onClose={() => setOpen(false)} />
+      {/* <Extension isOpen={open} onClose={() => setOpen(false)} /> */}
       {/* <Dialog isOpen={open} onClose={() => setOpen(false)}>
         <Path />
       </Dialog> */}

@@ -14,6 +14,22 @@ type TreeNode3 = Omit<TreeNode2, 'refs'> & { refs: { type: 'page' | 'block', tex
 let oldHref = ''
 let startTime = Date.now();
 const api = {
+  selectingBlockByUid(uid: string, shiftKeyPressed: boolean) {
+    if (shiftKeyPressed) {
+      window.roamAlphaAPI.ui.rightSidebar
+        .addWindow({
+          window:
+            { type: 'block', 'block-uid': uid }
+        })
+      return;
+    }
+    window.roamAlphaAPI.ui.setBlockFocusAndSelection({
+      location: {
+        "block-uid": uid,
+        "window-id": 'main-window'
+      }
+    })
+  },
   getAllTaggedBlocks() {
     window.roamAlphaAPI.q(`
 [
@@ -42,6 +58,7 @@ const api = {
   },
   recordPageAndScrollPosition() {
     oldHref = location.href;
+    console.log('record: ', oldHref)
   },
   restorePageAndScrollPosition() {
     // history.go(-1);
@@ -52,9 +69,10 @@ const api = {
     //         { uid: oldHref.split("/").pop() }
     //     })
     // }, 5)
+    console.log('restoring: ', oldHref)
     setTimeout(() => {
       location.replace(oldHref);
-    })
+    }, 20)
 
   },
   focusOnBlockWithoughtHistory(uid: string) {
@@ -71,7 +89,7 @@ const api = {
     hashes.push(uid);
     const newHash = hashes.join("/");
     var newUrl = location.origin + newHash;
-    console.log(newUrl, ' newUrl');
+    // console.log(newUrl, ' newUrl');
     setTimeout(() => {
       location.replace(newUrl);
     })
@@ -118,6 +136,7 @@ type PassProps = {
   itemPredicate?: (query: string, item: unknown) => boolean
   items: (v: any) => unknown[],
   itemRenderer: ItemRenderer<unknown>
+  onItemSelect?: (v: any) => void;
 }
 
 
@@ -161,6 +180,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [passProps, setPassProps] = useState<PassProps>({
     items: () => [],
     itemRenderer: () => <></>,
+    onItemSelect: () => { },
   });
   const [sources, setSources] = useState<{
     'lineMode': Map<string, TreeNode>,
@@ -205,7 +225,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         items: () => [],
         itemRenderer(item) {
           return <></>
-        },
+        }
       }
     },
     "@": (str) => {
@@ -216,7 +236,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         },
         items: (_sources: typeof sources) => _sources.tagMode,
         itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
-          console.log(item, ' = render', itemProps)
+          // console.log(item, ' = render', itemProps)
           return <MenuItem
             {...itemProps.modifiers}
             text={
@@ -285,6 +305,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const handleClose = () => {
     setOpen(false)
   }
+  // console.log(selected.current, ' = selected ', oldHref)
   return (
     <div >
       <Omnibar
@@ -299,15 +320,23 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           setTimeout(() => {
             setQuery("")
           }, 20)
-
         }}
-        onItemSelect={() => {
-          selected.current = true;
+        onItemSelect={(item: { uid: string }, e) => {
+          const shiftKeyPressed = (e as any).shiftKey
+          if (!shiftKeyPressed) {
+            selected.current = true;
+          } else {
+            api.restorePageAndScrollPosition()
+          }
           handleClose();
+          api.selectingBlockByUid(item.uid, shiftKeyPressed);
         }}
         {...passProps}
         items={passProps.items(sources)}
         onQueryChange={(query) => {
+          if (!isOpen) {
+            return;
+          }
           const usedMode = Object.keys(modes).find(mode => {
             if (query.startsWith(mode)) {
               return true;
@@ -322,7 +351,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         }}
         onActiveItemChange={(activeItem: TreeNode) => {
           // console.log(activeItem, ' ---- ', props.isOpen);
-          if (!activeItem || selected.current) {
+          if (!activeItem || selected.current || !isOpen) {
             return
           }
           api.focusOnBlockWithoughtHistory(activeItem.uid)
