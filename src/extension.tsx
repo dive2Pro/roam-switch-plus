@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from 'react-dom';
-import { Menu, MenuItem, Tag, } from "@blueprintjs/core";
+import { Button, ButtonGroup, Menu, MenuItem, Tag, Tooltip, } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar, OmnibarProps } from "@blueprintjs/select";
 import getFullTreeByParentUid from 'roamjs-components/queries/getFullTreeByParentUid';
 
@@ -8,13 +8,37 @@ import "./style.less";
 import { RoamBlock, TreeNode } from "roamjs-components/types";
 
 
+const delay = (ms?: number) => new Promise(resolve => {
+  setTimeout(resolve, ms)
+})
 type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], refs?: { id: number }[] }
 type TreeNode3 = Omit<TreeNode2, 'refs'> & { refs: { type: 'page' | 'block', text: string }[] }
 
 let oldHref = ''
-let startTime = Date.now();
 const api = {
-  selectingBlockByUid(uid: string, shiftKeyPressed: boolean) {
+  async insertBlockByUid(uid: string, order: number) {
+    const newUid = window.roamAlphaAPI.util.generateUID();
+    const parentUid = window.roamAlphaAPI.q(`[
+          :find [?e ...]
+          :where
+            [?b :block/uid "${uid}"]
+            [?b :block/parents ?parents]
+            [?parents :block/uid ?e]
+        ]`) as unknown as string[];
+    console.log(parentUid, newUid, order, uid)
+    await window.roamAlphaAPI.createBlock({
+      block: {
+        string: '',
+        uid: newUid,
+      },
+      location: {
+        "parent-uid": parentUid.pop(),
+        order: order
+      }
+    })
+    return { newUid, parentUid };
+  },
+  async selectingBlockByUid(uid: string, shiftKeyPressed: boolean) {
     if (shiftKeyPressed) {
       window.roamAlphaAPI.ui.rightSidebar
         .addWindow({
@@ -23,6 +47,12 @@ const api = {
         })
       return;
     }
+    await window.roamAlphaAPI.ui.mainWindow.openBlock({
+      block: {
+        uid
+      }
+    })
+    await delay(250)
     window.roamAlphaAPI.ui.setBlockFocusAndSelection({
       location: {
         "block-uid": uid,
@@ -49,6 +79,7 @@ const api = {
       :block/heading 
       :block/refs
       :block/open 
+      :block/parents
       [:children/view-type :as "viewType"] 
       [:block/text-align :as "textAlign"] 
       [:edit/time :as "editTime"] 
@@ -75,7 +106,7 @@ const api = {
     }, 20)
 
   },
-  focusOnBlockWithoughtHistory(uid: string) {
+  async focusOnBlockWithoughtHistory(uid: string) {
     // history.go(-1);
     // setTimeout(() => {
     //   window.roamAlphaAPI.ui.mainWindow
@@ -90,9 +121,8 @@ const api = {
     const newHash = hashes.join("/");
     var newUrl = location.origin + newHash;
     // console.log(newUrl, ' newUrl');
-    setTimeout(() => {
-      location.replace(newUrl);
-    })
+    await delay(1)
+    location.replace(newUrl);
   },
 }
 
@@ -139,6 +169,36 @@ type PassProps = {
   onItemSelect?: (v: any) => void;
 }
 
+type OnRightMenuClick = (type: "top" | 'right' | 'bottom', e: React.MouseEvent<HTMLElement>) => void;
+
+const RightMenu: FC<{
+  onClick: OnRightMenuClick
+}> = (props) => {
+  return <div className="right-menu">
+    <ButtonGroup>
+      <Tooltip
+        content={
+          <span>Insert a block above</span>
+        }>
+        <Button icon="add-row-top" onClick={e => props.onClick('top', e)} />
+      </Tooltip>
+
+      <Tooltip
+        content={
+          <span>Insert a block below</span>
+        }>
+        <Button icon="add-row-bottom" onClick={e => props.onClick('bottom', e)} />
+      </Tooltip>
+      <Tooltip
+        content={
+          <span>Open in sidebar</span>
+        }>
+        <Button icon="arrow-right" onClick={e => props.onClick('right', e)} />
+      </Tooltip>
+
+    </ButtonGroup>
+  </div>
+}
 
 
 export default function Extension(props: { isOpen: boolean, onClose: () => void }) {
@@ -187,7 +247,28 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     'strMode': TreeNode[],
     'tagMode': TreeNode3[]
   }>();
+  type OnRightMenuClick2 = (item: { uid: string, order: number }, type: "top" | 'right' | 'bottom', e: React.MouseEvent<HTMLElement>) => void;
 
+  const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const handles = {
+      right: () => {
+        api.selectingBlockByUid(item.uid, true);
+      },
+      top: async () => {
+        const newUid = await api.insertBlockByUid(item.uid, item.order)
+        api.selectingBlockByUid(newUid.newUid, e.shiftKey)
+      },
+      bottom: async () => {
+        const newUid = await api.insertBlockByUid(item.uid, item.order + 1)
+        api.selectingBlockByUid(newUid.newUid, e.shiftKey)
+      }
+    }
+    await handles[type]();
+    onDialogClose();
+  }
   // 记录当前网址和滑动的距离
   // 
   const defaultFn = (str: string) => {
@@ -201,15 +282,22 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         }
         return str ? item.text.toLowerCase().includes(str.toLowerCase()) : false;
       },
-      itemRenderer: (item: TreeNode, itemProps: IItemRendererProps) => {
+      itemRenderer: (item: TreeNode2, itemProps: IItemRendererProps) => {
         // console.log(item, ' = render', itemProps)
-        return <MenuItem className={`switch-result-item 
-                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
-                               `
-        }
+        return <MenuItem
+          style={{
+            paddingLeft: (item.parents?.length || 0) * 5
+          }}
           {...itemProps.modifiers}
           text={
-            highlightText(item.text, str)
+            <div
+              className={`switch-result-item ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}`}
+            >
+              {
+                highlightText(item.text, str)
+              }
+              <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
+            </div>
           }
           onClick={itemProps.handleClick}>
         </MenuItem>
@@ -253,6 +341,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 <small className="ellipsis">
                   {item.text}
                 </small>
+                <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
               </div>
             }
             onClick={itemProps.handleClick}>
@@ -305,23 +394,25 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const handleClose = () => {
     setOpen(false)
   }
+  const onDialogClose = () => {
+    // api.clearHistory
+    console.log('on close: 1')
+    if (!selected.current) {
+      api.restorePageAndScrollPosition()
+    }
+    handleClose();
+    setTimeout(() => {
+      setQuery("")
+    }, 20)
+  }
   // console.log(selected.current, ' = selected ', oldHref)
   return (
     <div >
       <Omnibar
         className="rm-switchs"
         isOpen={isOpen}
-        onClose={() => {
-          // api.clearHistory
-          if (!selected.current) {
-            api.restorePageAndScrollPosition()
-          }
-          handleClose();
-          setTimeout(() => {
-            setQuery("")
-          }, 20)
-        }}
-        onItemSelect={(item: { uid: string }, e) => {
+        onClose={onDialogClose}
+        onItemSelect={async (item: { uid: string }, e) => {
           const shiftKeyPressed = (e as any).shiftKey
           if (!shiftKeyPressed) {
             selected.current = true;
@@ -393,7 +484,7 @@ function flatTree(node: TreeNode2) {
   const blocks: TreeNode2[] = []
   const taggedBlocks: TreeNode3[] = []
 
-  const flat = (_node: TreeNode2, deep: string) => {
+  const flat = (_node: TreeNode2, deep: string, deepInt: number) => {
     lineMode.set(deep, _node);
     blocks.push(_node);
     if (_node.refs) {
@@ -430,12 +521,12 @@ function flatTree(node: TreeNode2) {
       })
     }
     _node.children?.forEach((childNode, index) => {
-      flat(childNode, deep + '.' + (index + 1))
+      flat(childNode, deep + '.' + (index + 1), deepInt + 1)
     })
   }
 
   node.children.forEach((childNode, index) => {
-    flat(childNode, (index + 1) + '')
+    flat(childNode, (index + 1) + '', 0)
   })
   return [lineMode, blocks, taggedBlocks] as const;
 }

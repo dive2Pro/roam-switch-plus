@@ -1,7 +1,7 @@
 .rm-switchs {
     .switch-result-item {
         white-space: initial;
-
+        position: relative;
         .rm-page-ref--tag {
             margin-right: 5px;
         }
@@ -11,6 +11,20 @@
             max-width: 200px;
             position: relative;
             top: 2px;
+            font-size: 70%;
+        }
+
+        &:hover {
+            .right-menu {
+                opacity: 1;
+            }
+        }
+
+        .right-menu {
+            opacity: 0;
+            position: absolute;
+            right: 0;
+            top: -5px;
         }
     }
 }
