@@ -1,11 +1,10 @@
 import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from 'react-dom';
-import { Button, ButtonGroup, Menu, MenuItem, Tag, Tooltip, } from "@blueprintjs/core";
-import { IItemRendererProps, ItemRenderer, Omnibar, OmnibarProps } from "@blueprintjs/select";
-import getFullTreeByParentUid from 'roamjs-components/queries/getFullTreeByParentUid';
+import { Button, ButtonGroup, InputGroup, Menu, MenuItem, Tag, Tooltip} from "@blueprintjs/core";
+import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
 
 import "./style.less";
-import { RoamBlock, TreeNode } from "roamjs-components/types";
+import { TreeNode } from "roamjs-components/types";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -97,14 +96,6 @@ const api = {
     console.log('record: ', oldHref)
   },
   restorePageAndScrollPosition() {
-    // history.go(-1);
-    // setTimeout(() => {
-    //   window.roamAlphaAPI.ui.mainWindow
-    //     .openBlock({
-    //       block:
-    //         { uid: oldHref.split("/").pop() }
-    //     })
-    // }, 5)
     console.log('restoring: ', oldHref)
     setTimeout(() => {
       location.replace(oldHref);
@@ -112,14 +103,7 @@ const api = {
 
   },
   async focusOnBlockWithoughtHistory(uid: string) {
-    // history.go(-1);
-    // setTimeout(() => {
-    //   window.roamAlphaAPI.ui.mainWindow
-    //     .openBlock({
-    //       block:
-    //         { uid: uid }
-    //     })
-    // }, 5)
+
     const hashes = location.hash.split("/")
     hashes.pop();
     hashes.push(uid);
@@ -240,7 +224,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     // 默认
     // setPassProps(defaultFn(""));
   }
-  
+
   useEffect(() => {
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+',
@@ -248,7 +232,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       async callback() {
         if (!isOpen) {
           await initData()
-          setQuery("")
+          setPassProps(defaultFn(""));
         }
         setOpen(prev => !prev)
       },
@@ -290,13 +274,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     'lineMode': TreeNode3[],
     'strMode': TreeNode3[],
     'tagMode': TreeNode3[]
-  }>({});
+  }>({} as any);
   type OnRightMenuClick2 = (item: { uid: string, order: number }, type: "top" | 'right' | 'bottom', e: React.MouseEvent<HTMLElement>) => void;
 
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
     e.preventDefault();
     e.stopPropagation();
-
+    selected.current = !e.shiftKey
     const handles = {
       right: () => {
         api.selectingBlockByUid(item.uid, true);
@@ -354,7 +338,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const modes: Record<string, (str: string) => PassProps> = {
     ":": (str) => {
-      console.log(str, ' line mode', sources.lineMode)
+      // console.log(str, ' line mode', sources.lineMode)
       return {
         itemPredicate(query: string, item: TreeNode3) {
           return item.deep.startsWith(str) || item.deep.split(".").join("").startsWith(str);
@@ -391,7 +375,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         },
         items: (_sources: typeof sources) => _sources.tagMode,
         itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
-          console.log(item, ' = render', itemProps, query, sources.tagMode)
+          // console.log(item, ' = render', itemProps, query, sources.tagMode)
           return <MenuItem
             {...itemProps.modifiers}
             text={
@@ -428,9 +412,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setActiveItem(itemsSource.find(item => item.uid === uid));
   }
   useEffect(() => {
-    selected.current = false;
     if (isOpen) {
       findActiveItem();
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 200)
     }
   }, [isOpen])
   const selected = useRef(false)
@@ -440,13 +426,14 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const onDialogClose = () => {
     // api.clearHistory
-    console.log('on close: 1')
+    console.log('on close: 1', selected)
     if (!selected.current) {
       api.restorePageAndScrollPosition()
     }
     handleClose();
     setTimeout(() => {
       setQuery("")
+      selected.current = false;
     }, 20)
   }
   const [activeItem, setActiveItem] = useState<TreeNode3>();
@@ -462,9 +449,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setPassProps(fn(str.trim()));
     setQuery(query)
   }
-
   return (
-    <div >
+    <div>
       <Omnibar<TreeNode3>
         className="rm-switchs"
         isOpen={isOpen}
@@ -472,25 +458,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         activeItem={activeItem}
         onClose={onDialogClose}
         onItemSelect={async (item: { uid: string }, e) => {
-          const shiftKeyPressed = (e as any).shiftKey
-          if (!shiftKeyPressed) {
-            selected.current = true;
-          } else {
-            api.restorePageAndScrollPosition()
-          }
-          handleClose();
+          const shiftKeyPressed = (e as any).shiftKey;
+          selected.current = !shiftKeyPressed;
+          onDialogClose();
           api.selectingBlockByUid(item.uid, shiftKeyPressed);
         }}
         {...passProps}
         items={itemsSource}
         onQueryChange={(query) => {
-          // if (!isOpen) {
-          //   return;
-          // }
           handleQueryChange(query)
         }}
         onActiveItemChange={(activeItem: TreeNode3) => {
-          // console.log(activeItem, ' ---- ', props.isOpen);
+          console.log(activeItem, ' ---- ', isOpen, selected.current);
           if (!activeItem || selected.current || !isOpen) {
             return
           }
