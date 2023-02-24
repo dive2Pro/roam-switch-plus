@@ -12,7 +12,7 @@ const delay = (ms?: number) => new Promise(resolve => {
   setTimeout(resolve, ms)
 })
 type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], deep: string, refs?: { id: number }[] }
-type TreeNode3 = Omit<TreeNode2, 'refs'> & { refs: { type: 'page' | 'block', text: string }[] }
+type TreeNode3 = Omit<TreeNode2, 'refs'> & { tags: { type: 'page' | 'block', text: string }[] }
 
 let oldHref = ''
 const api = {
@@ -72,6 +72,9 @@ const api = {
 ]
 `)
   },
+  async getFocusedBlockUid() {
+    return await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid()
+  },
   getCurrentPageFullTreeByUid(uid: string) {
     return window.roamAlphaAPI.q(`[:find (pull ?b [
       [:block/string :as "text"]
@@ -86,10 +89,11 @@ const api = {
       [:edit/time :as "editTime"] 
       :block/props 
       {:block/children ...}
-    ]) . :where [?b :block/uid "${uid}"]]`) as unknown as TreeNode2
+    ]) . :where [?b :block/uid "${uid}"]]`) as unknown as TreeNode3
   },
   recordPageAndScrollPosition() {
     oldHref = location.href;
+
     console.log('record: ', oldHref)
   },
   restorePageAndScrollPosition() {
@@ -165,7 +169,7 @@ function highlightText(text: string, query: string) {
 
 type PassProps = {
   itemPredicate?: (query: string, item: unknown) => boolean
-  items: (v: any) => unknown[],
+  items: (v: any) => TreeNode3[],
   itemRenderer: ItemRenderer<unknown>
   onItemSelect?: (v: any) => void;
 }
@@ -211,17 +215,42 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
   const initData = async () => {
     api.recordPageAndScrollPosition();
-    await onRouteChange();
+    const pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+    if (!pageOrBlockUid) {
+      throw new Error("Not in a page")
+    }
+
+    const pageUid = (window.roamAlphaAPI.q(`[
+        :find ?e .
+        :where
+          [?b :block/uid "${pageOrBlockUid}"]
+          [?b :block/page ?p]
+          [?p :block/uid ?e]
+      ]`) as unknown as string) || pageOrBlockUid;
+    // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
+    const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid))
+    console.log(flatted, ' -@', pageUid, pageOrBlockUid)
+
+    setSources({
+      lineMode: flatted[1].filter(item => item.text),
+      strMode: flatted[1].filter(item => item.text),
+      tagMode: flatted[2].filter(item => item.text)
+    });
+
+    // 默认
+    // setPassProps(defaultFn(""));
   }
+  
   useEffect(() => {
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+',
       "default-hotkey": ['super-shift-p'],
       async callback() {
-        if (!isOpen)
+        if (!isOpen) {
           await initData()
+          setQuery("")
+        }
         setOpen(prev => !prev)
-
       },
     })
     props.extensionAPI.ui.commandPalette.addCommand({
@@ -230,10 +259,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       async callback() {
         if (!isOpen) {
           await initData()
-        }
-        setOpen(prev => !prev)
-        setTimeout(() => {
           setQuery("@")
+        }
+        setTimeout(() => {
+          setOpen(prev => !prev)
         }, 100)
       },
     })
@@ -243,10 +272,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       async callback() {
         if (!isOpen) {
           await initData()
+          setQuery(":")
+          findActiveItem();
         }
         setOpen(prev => !prev)
         setTimeout(() => {
-          setQuery(":")
         }, 100)
       },
     })
@@ -257,10 +287,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     onItemSelect: () => { },
   });
   const [sources, setSources] = useState<{
-    'lineMode': TreeNode2[],
-    'strMode': TreeNode2[],
+    'lineMode': TreeNode3[],
+    'strMode': TreeNode3[],
     'tagMode': TreeNode3[]
-  }>();
+  }>({});
   type OnRightMenuClick2 = (item: { uid: string, order: number }, type: "top" | 'right' | 'bottom', e: React.MouseEvent<HTMLElement>) => void;
 
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
@@ -296,7 +326,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         }
         return str ? item.text.toLowerCase().includes(str.toLowerCase()) : false;
       },
-      itemRenderer: (item: TreeNode2, itemProps: IItemRendererProps) => {
+      itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
         // console.log(item, ' = render', itemProps)
         return <MenuItem
           style={{
@@ -326,11 +356,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     ":": (str) => {
       console.log(str, ' line mode', sources.lineMode)
       return {
-        itemPredicate(query: string, item: TreeNode2) {
+        itemPredicate(query: string, item: TreeNode3) {
           return item.deep.startsWith(str) || item.deep.split(".").join("").startsWith(str);
         },
         items: (_sources: typeof sources) => _sources.lineMode,
-        itemRenderer: (item: TreeNode2, itemProps: IItemRendererProps) => {
+        itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
           return <MenuItem
             {...itemProps.modifiers}
             text={
@@ -342,7 +372,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 <div className="deep">
                   {highlightText(item.deep, str)}
                 </div>
-                {item.text}
+                <div className="ellipsis">
+                  {item.text}
+                </div>
                 <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
               </div>
             }
@@ -355,11 +387,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
       return {
         itemPredicate(query, item: TreeNode3) {
-          return item.refs.some(ref => ref.text.toLowerCase().includes(str.toLowerCase()));
+          return item.tags.some(ref => ref.text.toLowerCase().includes(str.toLowerCase()));
         },
         items: (_sources: typeof sources) => _sources.tagMode,
         itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
-          // console.log(item, ' = render', itemProps)
+          console.log(item, ' = render', itemProps, query, sources.tagMode)
           return <MenuItem
             {...itemProps.modifiers}
             text={
@@ -368,7 +400,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `} >
                 {
-                  item.refs.map(ref => {
+                  item.tags.map(ref => {
                     return <Tag
                       icon={ref.type === 'page' ? 'git-new-branch' : 'new-link'}
                       className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
@@ -388,41 +420,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     // "#": (str) => { },
     "s:": defaultFn
   }
-  const onRouteChange = async () => {
-    const pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
-    if (!pageOrBlockUid) {
-      throw new Error("Not in a page")
-    }
 
-    const pageUid = (window.roamAlphaAPI.q(`[
-        :find ?e .
-        :where
-          [?b :block/uid "${pageOrBlockUid}"]
-          [?b :block/page ?p]
-          [?p :block/uid ?e]
-      ]`) as unknown as string) || pageOrBlockUid;
-    // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode2, []));
-    const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid))
-    console.log(flatted, ' -@', pageUid, pageOrBlockUid)
 
-    setSources({
-      lineMode: flatted[1].filter(item => item.text),
-      strMode: flatted[1].filter(item => item.text),
-      tagMode: flatted[2].filter(item => item.text)
-    });
-    // 默认
-    setPassProps(defaultFn(""));
+  const itemsSource = passProps.items(sources)
+  const findActiveItem = async () => {
+    const uid = oldHref.split("/").pop();
+    setActiveItem(itemsSource.find(item => item.uid === uid));
   }
-  // useEffect(() => {
-
-  //   window.addEventListener('locationchange', onRouteChange);
-  //   return (() => {
-  //     window.removeEventListener('locationchange', onRouteChange);
-  //   });
-  // }, [])
-
   useEffect(() => {
     selected.current = false;
+    if (isOpen) {
+      findActiveItem();
+    }
   }, [isOpen])
   const selected = useRef(false)
   const [query, setQuery] = useState("")
@@ -440,12 +449,27 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       setQuery("")
     }, 20)
   }
-  // console.log(selected.current, ' = selected ', oldHref)
+  const [activeItem, setActiveItem] = useState<TreeNode3>();
+  function handleQueryChange(query: string) {
+    const tag = Object.keys(modes).find(mode => {
+      if (query.startsWith(mode)) {
+        return true;
+      }
+      return false;
+    })
+    const fn = modes[tag] || defaultFn;
+    const str = modes[tag] ? query.substring(tag.length) : query;
+    setPassProps(fn(str.trim()));
+    setQuery(query)
+  }
+
   return (
     <div >
-      <Omnibar
+      <Omnibar<TreeNode3>
         className="rm-switchs"
         isOpen={isOpen}
+        scrollToActiveItem={true}
+        activeItem={activeItem}
         onClose={onDialogClose}
         onItemSelect={async (item: { uid: string }, e) => {
           const shiftKeyPressed = (e as any).shiftKey
@@ -458,28 +482,19 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           api.selectingBlockByUid(item.uid, shiftKeyPressed);
         }}
         {...passProps}
-        items={passProps.items(sources)}
+        items={itemsSource}
         onQueryChange={(query) => {
-          if (!isOpen) {
-            return;
-          }
-          const usedMode = Object.keys(modes).find(mode => {
-            if (query.startsWith(mode)) {
-              return true;
-            }
-            return false;
-          })
-          const tag = usedMode;
-          const fn = modes[tag] || defaultFn;
-          const str = modes[tag] ? query.substring(tag.length) : query;
-          setPassProps(fn(str.trim()));
-          setQuery(query)
+          // if (!isOpen) {
+          //   return;
+          // }
+          handleQueryChange(query)
         }}
-        onActiveItemChange={(activeItem: TreeNode) => {
+        onActiveItemChange={(activeItem: TreeNode3) => {
           // console.log(activeItem, ' ---- ', props.isOpen);
           if (!activeItem || selected.current || !isOpen) {
             return
           }
+          setActiveItem(activeItem);
           api.focusOnBlockWithoughtHistory(activeItem.uid)
         }}
         resetOnQuery
@@ -513,22 +528,23 @@ export function initExtension(extensionAPI: RoamExtensionAPI) {
 }
 
 
-function flatTree(node: TreeNode2) {
+function flatTree(node: TreeNode3) {
   console.log(node, ' = node')
-  const lineBlocks: TreeNode2[] = [];
-  const blocks: TreeNode2[] = []
+  const lineBlocks: TreeNode3[] = [];
+  const blocks: TreeNode3[] = []
   const taggedBlocks: TreeNode3[] = []
 
   const flat = (_node: TreeNode2, deep: string, deepInt: number) => {
     // lineMode.set(deep, _node);
     _node.deep = deep;
-    blocks.push(_node);
+    blocks.push(_node as unknown as TreeNode3);
     if (_node.refs) {
       const replacedString = replaceBlockReference(_node.text);
       _node.text = replacedString;
+
       taggedBlocks.push({
         ..._node,
-        refs: _node.refs.map(ref => {
+        tags: _node.refs.map(ref => {
           const pageStr = window.roamAlphaAPI.q(`
         [
           :find ?t .
