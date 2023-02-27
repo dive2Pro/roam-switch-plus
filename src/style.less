@@ -1,10 +1,28 @@
 .rm-switchs {
     width: 600px;
     top: 25vh;
+
+    .rm-page-ref--tag {
+        color: white;
+    }
+
+    .bp3-dark {
+        .rm-page-ref--tag {
+            color: 'red'
+        }
+    }
+
     .switch-result-item {
         white-space: initial;
         position: relative;
         display: flex;
+
+        &.tag-mode {
+            .ellipsis {
+                -webkit-line-clamp: 1;
+            }
+        }
+
         .rm-page-ref--tag {
             margin-right: 5px;
         }
@@ -34,10 +52,16 @@
             margin-top: 4px;
             margin-right: 2px;
         }
+
         .ellipsis {
-            display: block;
-            max-width: 82%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            flex: 1
         }
+
         .deep {
             margin-right: 5px;
         }

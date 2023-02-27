@@ -1,7 +1,8 @@
 import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from 'react-dom';
-import { Button, ButtonGroup, InputGroup, Menu, MenuItem, Tag, Tooltip} from "@blueprintjs/core";
+import { Button, ButtonGroup, InputGroup, Menu, MenuItem, Tag, Tooltip } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
 import "./style.less";
 import { TreeNode } from "roamjs-components/types";
@@ -196,7 +197,7 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
 
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
-
+  const isOpenRef = useRef(isOpen)
   const initData = async () => {
     api.recordPageAndScrollPosition();
     const pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
@@ -212,8 +213,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           [?p :block/uid ?e]
       ]`) as unknown as string) || pageOrBlockUid;
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
-    const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid))
-    console.log(flatted, ' -@', pageUid, pageOrBlockUid)
+    const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid));
 
     setSources({
       lineMode: flatted[1].filter(item => item.text),
@@ -380,7 +380,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             {...itemProps.modifiers}
             text={
               <div
-                className={`switch-result-item 
+                className={`switch-result-item tag-mode
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `} >
                 {
@@ -414,9 +414,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   useEffect(() => {
     if (isOpen) {
       findActiveItem();
+    } else {
       setTimeout(() => {
-        inputRef.current?.focus();
-      }, 200)
+        setQuery("")
+        selected.current = false;
+      }, 20)
     }
   }, [isOpen])
   const selected = useRef(false)
@@ -431,10 +433,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       api.restorePageAndScrollPosition()
     }
     handleClose();
-    setTimeout(() => {
-      setQuery("")
-      selected.current = false;
-    }, 20)
   }
   const [activeItem, setActiveItem] = useState<TreeNode3>();
   function handleQueryChange(query: string) {
@@ -449,13 +447,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setPassProps(fn(str.trim()));
     setQuery(query)
   }
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  let scrollToActiveItem = () => { };
   return (
     <div>
       <Omnibar<TreeNode3>
         className="rm-switchs"
         isOpen={isOpen}
-        scrollToActiveItem={true}
+        scrollToActiveItem
         activeItem={activeItem}
+        inputProps={{
+          placeholder: 'Search content in place'
+        }}
         onClose={onDialogClose}
         onItemSelect={async (item: { uid: string }, e) => {
           const shiftKeyPressed = (e as any).shiftKey;
@@ -469,11 +472,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           handleQueryChange(query)
         }}
         onActiveItemChange={(activeItem: TreeNode3) => {
-          console.log(activeItem, ' ---- ', isOpen, selected.current);
+          // console.log(activeItem, ' ---- ', isOpen, selected.current);
           if (!activeItem || selected.current || !isOpen) {
             return
           }
           setActiveItem(activeItem);
+          scrollToActiveItem()
           api.focusOnBlockWithoughtHistory(activeItem.uid)
         }}
         resetOnQuery
@@ -481,15 +485,25 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         query={query}
         noResults={<MenuItem disabled={true} text="No results." />}
         itemListRenderer={(itemListProps) => {
-          // @ts-ignore
-          return <Menu {...itemListProps.menuProps}>
-            {itemListProps.filteredItems.map((item, index) => {
-              return itemListProps.renderItem(item, index)
-            })}
+          scrollToActiveItem = () => {
+            const index = itemListProps.filteredItems.findIndex(item => item === itemListProps.activeItem)
+            virtuosoRef.current.scrollIntoView({
+              index,
+              behavior: 'smooth',
+              align: 'center'
+            })
+          }
+          return <Menu><Virtuoso
+            ref={virtuosoRef}
+            style={{ height: '400px' }}
+            totalCount={itemListProps.filteredItems.length}
+            itemContent={index => {
+              return itemListProps.renderItem(itemListProps.filteredItems[index], index)
+            }} />
           </Menu>
         }}
       />
-    </div>
+    </div >
   );
 }
 
