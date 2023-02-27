@@ -77,7 +77,20 @@ const api = {
     return await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid()
   },
   getCurrentPageFullTreeByUid(uid: string) {
-    return window.roamAlphaAPI.q(`[:find (pull ?b [
+    const sortByOrder = (node: TreeNode3) => {
+      const _sortByOrder = (_node: TreeNode3) => {
+        _node.children = _node.children ? _node.children.map(_sortByOrder).sort(orderSort) : []
+        return _node;
+      }
+
+      const orderSort = (a: TreeNode3, b: TreeNode3) => {
+        return a.order - b.order
+      }
+
+      node.children = node.children.map(_sortByOrder).sort(orderSort)
+      return node;
+    }
+    const tree = window.roamAlphaAPI.q(`[:find (pull ?b [
       [:block/string :as "text"]
       :block/uid 
       :block/order 
@@ -91,6 +104,9 @@ const api = {
       :block/props 
       {:block/children ...}
     ]) . :where [?b :block/uid "${uid}"]]`) as unknown as TreeNode3
+
+
+    return sortByOrder(tree);
   },
   recordPageAndScrollPosition() {
     oldHref = location.href;
@@ -244,7 +260,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       query = nextMode + value.substring(modeName.length)
     }
     handleQueryChange(query);
-    inputRef.current.setSelectionRange(1, query.length)
+    inputRef.current.setSelectionRange(nextMode.length, query.length)
     findActiveItem()
   }
   useEffect(() => {
@@ -254,8 +270,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       async callback() {
         if (!refs.current.isOpen) {
           await initData()
-          setOpen(prev => !prev)
         }
+        open();
         resetInputWithMode("")
       },
     })
@@ -265,8 +281,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       async callback() {
         if (!refs.current.isOpen) {
           await initData()
-          setOpen(prev => !prev)
         }
+        open();
         resetInputWithMode("@")
 
       },
@@ -277,13 +293,23 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       async callback() {
         if (!refs.current.isOpen) {
           await initData()
-          setOpen(prev => !prev)
-        }
-        resetInputWithMode(":")
+        } 
+        open();
 
+        resetInputWithMode(":")
       },
     })
-  }, [])
+  }, []);
+
+  const openRef = useRef(false);
+  
+  const open = async () => {
+    openRef.current = true;
+    setOpen(true);
+    await delay(200);
+    openRef.current = false;
+  }
+
   const [passProps, setPassProps] = useState<PassProps>({
     items: () => [],
     itemRenderer: () => <></>,
@@ -420,25 +446,24 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
       }
     },
-    // "#": (str) => { },
     "s:": defaultFn
   }
 
-
   const itemsSource = passProps.items(sources)
+
   const findActiveItem = useEvent(async () => {
     const uid = oldHref.split("/").pop();
     const activeItem = itemsSource.find(item => item.uid === uid)
-    // console.log(activeItem, ' = item', itemsSource)
-    madeActiveItemChange(activeItem)
+    console.log(uid, ' = uid item', activeItem)
+    madeActiveItemChange(activeItem, true)
   })
-  const madeActiveItemChange = (item: TreeNode3) => {
-    setTimeout(() => {
-      setActiveItem(item)
-      scrollToActiveItem()
-      api.focusOnBlockWithoughtHistory(item.uid)
-    }, 150)
 
+  const madeActiveItemChange = async (item: TreeNode3, immediately = false) => {
+    setActiveItem(item)
+    await delay(10)
+    console.log(item, ' --- delay')
+    scrollToActiveItem(item, immediately)
+    api.focusOnBlockWithoughtHistory(item.uid)
   }
   useEffect(() => {
     if (isOpen) {
@@ -476,7 +501,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setQuery(query)
   }
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  let scrollToActiveItem = () => { };
+  let scrollToActiveItem = (item: TreeNode3, immediately: boolean) => { };
   // console.log(query, passProps, itemsSource)
   return (
     <div>
@@ -501,10 +526,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           handleQueryChange(query)
         }}
         onActiveItemChange={(_activeItem: TreeNode3) => {
-          // console.log(activeItem, ' ---- ', _activeItem);
-          if (!_activeItem || selected.current || !isOpen) {
+          if (!_activeItem || selected.current || openRef.current) {
             return
           }
+          console.log(activeItem, ' --active change-- ', _activeItem);
           madeActiveItemChange(_activeItem)
         }}
         resetOnQuery
@@ -512,14 +537,16 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         query={query}
         noResults={<MenuItem disabled={true} text="No results." />}
         itemListRenderer={(itemListProps) => {
-          scrollToActiveItem = () => {
-            const index = itemListProps.filteredItems.findIndex(item => item === itemListProps.activeItem)
+          scrollToActiveItem = (node: TreeNode3, immediately = false) => {
+            const index = itemListProps.filteredItems.findIndex(item => item.uid === node.uid)
             virtuosoRef.current.scrollIntoView({
               index,
-              behavior: 'smooth',
+              behavior:  immediately ? 'auto' : 'smooth',
               align: 'center'
-            })
+            });
+            // console.log(index, ' = index', itemListProps.activeItem)
           }
+
           return <Menu><Virtuoso
             ref={virtuosoRef}
             style={{ height: '400px' }}
