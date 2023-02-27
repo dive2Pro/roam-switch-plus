@@ -6,6 +6,7 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
 import "./style.less";
 import { TreeNode } from "roamjs-components/types";
+import { useEvent } from "./hooks";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -244,6 +245,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     }
     handleQueryChange(query);
     inputRef.current.setSelectionRange(1, query.length)
+    findActiveItem()
   }
   useEffect(() => {
     props.extensionAPI.ui.commandPalette.addCommand({
@@ -266,6 +268,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           setOpen(prev => !prev)
         }
         resetInputWithMode("@")
+
       },
     })
     props.extensionAPI.ui.commandPalette.addCommand({
@@ -277,6 +280,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           setOpen(prev => !prev)
         }
         resetInputWithMode(":")
+
       },
     })
   }, [])
@@ -422,13 +426,22 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
 
   const itemsSource = passProps.items(sources)
-  const findActiveItem = async () => {
+  const findActiveItem = useEvent(async () => {
     const uid = oldHref.split("/").pop();
-    setActiveItem(itemsSource.find(item => item.uid === uid));
+    const activeItem = itemsSource.find(item => item.uid === uid)
+    // console.log(activeItem, ' = item', itemsSource)
+    madeActiveItemChange(activeItem)
+  })
+  const madeActiveItemChange = (item: TreeNode3) => {
+    setTimeout(() => {
+      setActiveItem(item)
+      scrollToActiveItem()
+      api.focusOnBlockWithoughtHistory(item.uid)
+    }, 150)
+
   }
   useEffect(() => {
     if (isOpen) {
-      findActiveItem();
     } else {
       setTimeout(() => {
         setQuery("")
@@ -456,7 +469,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       }
       return false;
     });
-    console.log('handle query change: ', query)
+    // console.log('handle query change: ', query)
     const fn = modes[tag] || defaultFn;
     const str = modes[tag] ? query.substring(tag.length) : query;
     setPassProps(fn(str.trim()));
@@ -464,7 +477,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   let scrollToActiveItem = () => { };
-  console.log(query, passProps, itemsSource)
+  // console.log(query, passProps, itemsSource)
   return (
     <div>
       <Omnibar<TreeNode3>
@@ -487,14 +500,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         onQueryChange={(query) => {
           handleQueryChange(query)
         }}
-        onActiveItemChange={(activeItem: TreeNode3) => {
-          // console.log(activeItem, ' ---- ', isOpen, selected.current);
-          if (!activeItem || selected.current || !isOpen) {
+        onActiveItemChange={(_activeItem: TreeNode3) => {
+          // console.log(activeItem, ' ---- ', _activeItem);
+          if (!_activeItem || selected.current || !isOpen) {
             return
           }
-          setActiveItem(activeItem);
-          scrollToActiveItem()
-          api.focusOnBlockWithoughtHistory(activeItem.uid)
+          madeActiveItemChange(_activeItem)
         }}
         resetOnQuery
         resetOnSelect
