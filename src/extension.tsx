@@ -197,7 +197,15 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
 
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
-  const isOpenRef = useRef(isOpen)
+  const [query, setQuery] = useState("")
+  const inputRef = useRef<HTMLInputElement>()
+  const refs = useRef({
+    isOpen: false,
+    query: ''
+  });
+  refs.current.isOpen = isOpen;
+  refs.current.query = query
+
   const initData = async () => {
     api.recordPageAndScrollPosition();
     const pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
@@ -225,43 +233,50 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     // setPassProps(defaultFn(""));
   }
 
+  const resetInputWithMode = (nextMode: string) => {
+    const value = inputRef.current.value;
+    const modeName = Object.keys(modes).find(mode => {
+      return value.startsWith(mode)
+    })
+    let query = `${nextMode}${value}`;
+    if (modeName) {
+      query = nextMode + value.substring(modeName.length)
+    }
+    handleQueryChange(query);
+    inputRef.current.setSelectionRange(1, query.length)
+  }
   useEffect(() => {
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+',
       "default-hotkey": ['super-shift-p'],
       async callback() {
-        if (!isOpen) {
+        if (!refs.current.isOpen) {
           await initData()
-          setPassProps(defaultFn(""));
+          setOpen(prev => !prev)
         }
-        setOpen(prev => !prev)
+        resetInputWithMode("")
       },
     })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+ in Tag Mode',
       "default-hotkey": ['super-shift-o'],
       async callback() {
-        if (!isOpen) {
+        if (!refs.current.isOpen) {
           await initData()
-          setQuery("@")
-        }
-        setTimeout(() => {
           setOpen(prev => !prev)
-        }, 100)
+        }
+        resetInputWithMode("@")
       },
     })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+ in Line Mode',
       "default-hotkey": ['super-shift-l'],
       async callback() {
-        if (!isOpen) {
+        if (!refs.current.isOpen) {
           await initData()
-          setQuery(":")
-          findActiveItem();
+          setOpen(prev => !prev)
         }
-        setOpen(prev => !prev)
-        setTimeout(() => {
-        }, 100)
+        resetInputWithMode(":")
       },
     })
   }, [])
@@ -384,7 +399,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `} >
                 {
-                  item.tags.map(ref => {
+                  item.tags?.map(ref => {
                     return <Tag
                       icon={ref.type === 'page' ? 'git-new-branch' : 'new-link'}
                       className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
@@ -422,7 +437,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     }
   }, [isOpen])
   const selected = useRef(false)
-  const [query, setQuery] = useState("")
   const handleClose = () => {
     setOpen(false)
   }
@@ -441,7 +455,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         return true;
       }
       return false;
-    })
+    });
+    console.log('handle query change: ', query)
     const fn = modes[tag] || defaultFn;
     const str = modes[tag] ? query.substring(tag.length) : query;
     setPassProps(fn(str.trim()));
@@ -449,6 +464,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   let scrollToActiveItem = () => { };
+  console.log(query, passProps, itemsSource)
   return (
     <div>
       <Omnibar<TreeNode3>
@@ -457,7 +473,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         scrollToActiveItem
         activeItem={activeItem}
         inputProps={{
-          placeholder: 'Search content in place'
+          inputRef: inputRef
         }}
         onClose={onDialogClose}
         onItemSelect={async (item: { uid: string }, e) => {
