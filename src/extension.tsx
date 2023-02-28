@@ -15,8 +15,57 @@ const delay = (ms?: number) => new Promise(resolve => {
 type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], deep: string, refs?: { id: number }[] }
 type TreeNode3 = Omit<TreeNode2, 'refs'> & { tags: { type: 'page' | 'block', text: string }[] }
 
+type SideBarItem = {
+  "collapsed?": boolean
+  order: number
+  "pinned?": boolean
+  "window-id": string;
+  dom: Element;
+  title: string;
+  uid: string;
+} & (
+    { type: "search-query" }
+    | { type: "graph", "page-uid": string }
+    | { type: 'block', "block-uid": string }
+    | { type: 'outline', "page-uid": string }
+    | { type: "mentions", "mentions-uid": string }
+  )
+
 let oldHref = ''
 const api = {
+  toggleSidebarWindow(sidebarItem: SideBarItem) {
+    window.roamAlphaAPI.ui.rightSidebar.collapseWindow({
+      window: sidebarItem
+    })
+  },
+  removeSidebarWindow(sidebarItem: SideBarItem) { },
+  getRightSidebarItems() {
+    const parentEl = document.querySelector(".sidebar-content");
+    return window.roamAlphaAPI.ui.rightSidebar.getWindows().map((sidebarItemWindow, index) => {
+      let title = '';
+      const dom = parentEl.children[index] as HTMLDivElement;
+      // @ts-ignore
+      if (sidebarItemWindow.type === 'search-query' || sidebarItemWindow.type === 'graph'
+        || sidebarItemWindow.type === 'mentions'
+      ) {
+        // @ts-ignore
+        title = dom.querySelector(".rm-sidebar-window").firstElementChild.children[1].innerText
+      } else {
+        if (sidebarItemWindow.type === 'block') {
+          title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["block-uid"]}"] [?b :block/string ?e]]`) as unknown as string
+
+        } else {
+          title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["page-uid"]}"] [?b :node/title ?e]]`) as unknown as string
+        }
+      }
+      return {
+        ...sidebarItemWindow,
+        uid: sidebarItemWindow["window-id"],
+        dom,
+        title,
+      } as SideBarItem
+    });
+  },
   async insertBlockByUid(uid: string, order: number) {
     const newUid = window.roamAlphaAPI.util.generateUID();
     const parentUids = window.roamAlphaAPI.q(`[
@@ -171,12 +220,16 @@ function highlightText(text: string, query: string) {
 
 type PassProps = {
   itemPredicate?: (query: string, item: unknown) => boolean
-  items: (v: any) => TreeNode3[],
+  items: (v: any) => (TreeNode3 | SideBarItem)[],
   itemRenderer: ItemRenderer<unknown>
   onItemSelect?: (v: any) => void;
 }
 
-type OnRightMenuClick = (type: "top" | 'right' | 'bottom', e: React.MouseEvent<HTMLElement>) => void;
+
+type RightMenuType = "top" | 'right' | 'bottom' | 'switch' | 'remove';
+type OnRightMenuClick2 = (item: SideBarItem | TreeNode3, type: RightMenuType, e: React.MouseEvent<HTMLElement>) => void;
+
+type OnRightMenuClick = (type: RightMenuType, e: React.MouseEvent<HTMLElement>) => void;
 
 const RightMenu: FC<{
   onClick: OnRightMenuClick
@@ -207,6 +260,28 @@ const RightMenu: FC<{
   </div>
 }
 
+const SidebarRightMenu: FC<{
+  onClick: OnRightMenuClick
+}> = (props) => {
+  return <div className="right-menu">
+    <ButtonGroup>
+      <Tooltip
+        content={
+          <span>Toggle sidebar</span>
+        }>
+        <Button icon="segmented-control" onClick={e => props.onClick('switch', e)} />
+      </Tooltip>
+      <Tooltip
+        content={
+          <span>Open in sidebar</span>
+        }>
+        <Button icon="small-cross" onClick={e => props.onClick('remove', e)} />
+      </Tooltip>
+
+    </ButtonGroup>
+  </div>
+}
+
 
 export default function Extension(props: { isOpen: boolean, onClose: () => void }) {
 
@@ -218,7 +293,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const inputRef = useRef<HTMLInputElement>()
   const refs = useRef({
     isOpen: false,
-    query: ''
+    query: '',
+    isClosing: false
   });
   refs.current.isOpen = isOpen;
   refs.current.query = query
@@ -243,7 +319,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setSources({
       lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
-      tagMode: flatted[2].filter(item => item.text)
+      tagMode: flatted[2].filter(item => item.text),
+      sidebarMode: api.getRightSidebarItems()
     });
 
     // 默认
@@ -293,21 +370,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       async callback() {
         if (!refs.current.isOpen) {
           await initData()
-        } 
+        }
         open();
-
         resetInputWithMode(":")
       },
     })
   }, []);
 
-  const openRef = useRef(false);
-  
+
   const open = async () => {
-    openRef.current = true;
+    refs.current.isOpen = true;
+    refs.current.isClosing = false;
     setOpen(true);
     await delay(200);
-    openRef.current = false;
+    refs.current.isOpen = false;
   }
 
   const [passProps, setPassProps] = useState<PassProps>({
@@ -318,9 +394,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [sources, setSources] = useState<{
     'lineMode': TreeNode3[],
     'strMode': TreeNode3[],
-    'tagMode': TreeNode3[]
+    'tagMode': TreeNode3[],
+    'sidebarMode': SideBarItem[]
   }>({} as any);
-  type OnRightMenuClick2 = (item: { uid: string, order: number }, type: "top" | 'right' | 'bottom', e: React.MouseEvent<HTMLElement>) => void;
 
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
     e.preventDefault();
@@ -338,6 +414,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         changeSelected(!e.shiftKey)
         const newUid = await api.insertBlockByUid(item.uid, item.order + 1)
         api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
+      },
+      switch: () => {
+        api.toggleSidebarWindow(item as SideBarItem)
+      },
+      remove: () => {
+        api.removeSidebarWindow(item as SideBarItem)
       }
     }
     await handles[type]();
@@ -447,7 +529,30 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
       }
     },
-    "s:": defaultFn
+    "s:": defaultFn,
+    ">": (str) => {
+      return {
+        items: (_sources: typeof sources) => _sources.sidebarMode,
+        itemPredicate(query, item: SideBarItem) {
+          return item.title.toLowerCase().includes(str.toLowerCase())
+        },
+        itemRenderer(item: SideBarItem, itemProps: IItemRendererProps) {
+          // console.log(item, ' = render', itemProps, query, sources.tagMode)
+          return <MenuItem
+            {...itemProps.modifiers}
+            text={
+              <div
+                className={`switch-result-item
+                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
+                               `} >
+                {item.title}
+              </div>
+            }
+            onClick={itemProps.handleClick}>
+          </MenuItem>
+        }
+      }
+    }
   }
 
   const itemsSource = passProps.items(sources)
@@ -456,13 +561,31 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     const uid = oldHref.split("/").pop();
     const activeItem = itemsSource.find(item => item.uid === uid)
     console.log(uid, ' = uid item', activeItem)
-    madeActiveItemChange(activeItem, true)
+    if (activeItem)
+      madeActiveItemChange(activeItem, true)
   })
 
-  const madeActiveItemChange = async (item: TreeNode3, immediately = false) => {
-    setActiveItem(item)
+  const focusSidebarWindow = async (item: SideBarItem) => {
+    if (refs.current.isClosing) {
+      return;
+    }
+    setTimeout(() => {
+      item.dom.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }, 10)
+
+    console.log('dom; ', item)
+  }
+
+  const madeActiveItemChange = async (item: TreeNode3 | SideBarItem, immediately = false) => {
     await delay(100)
     console.log(item, ' --- delay')
+    if ('dom' in item) {
+      focusSidebarWindow(item)
+      return
+    }
     scrollToActiveItem(item, immediately)
     api.focusOnBlockWithoughtHistory(item.uid)
   }
@@ -480,6 +603,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     selected.current = next;
   }
   const handleClose = () => {
+    refs.current.isClosing = true;
     setOpen(false)
   }
   const onDialogClose = () => {
@@ -490,7 +614,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     }
     handleClose();
   }
-  const [activeItem, setActiveItem] = useState<TreeNode3>();
+  const [activeItem, setActiveItem] = useState<TreeNode3 | SideBarItem>();
   function handleQueryChange(query: string) {
     const tag = Object.keys(modes).find(mode => {
       if (query.startsWith(mode)) {
@@ -505,12 +629,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setQuery(query)
   }
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const filteredItems = useRef<TreeNode3[]>([]);
-  let scrollToActiveItem = (item: TreeNode3, immediately: boolean) => { };
+  const filteredItems = useRef<(TreeNode3 | SideBarItem)[]>([]);
+  let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => { };
   // console.log(query, passProps, itemsSource)
   return (
     <div>
-      <Omnibar<TreeNode3>
+      <Omnibar<TreeNode3 | SideBarItem>
         className="rm-switchs"
         isOpen={isOpen}
         scrollToActiveItem
@@ -530,11 +654,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         onQueryChange={(query) => {
           handleQueryChange(query)
         }}
-        onActiveItemChange={(_activeItem: TreeNode3) => {
-          if (!_activeItem || selected.current || openRef.current) {
+        onActiveItemChange={(_activeItem: TreeNode3 | SideBarItem) => {
+          if (!_activeItem) {
+            return;
+          }
+          if ('dom' in _activeItem) {
+            setActiveItem(_activeItem)
+            focusSidebarWindow(_activeItem)
+            return;
+          }
+          if (selected.current || refs.current.isOpen) {
             return
           }
           console.log(activeItem, ' --active change-- ', _activeItem);
+          setActiveItem(_activeItem)
           madeActiveItemChange(_activeItem)
         }}
         resetOnQuery
@@ -543,11 +676,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         noResults={<MenuItem disabled={true} text="No results." />}
         itemListRenderer={(itemListProps) => {
           filteredItems.current = itemListProps.filteredItems;
-          scrollToActiveItem = (node: TreeNode3, immediately = false) => {
+          scrollToActiveItem = (node: { uid: string }, immediately = false) => {
             const index = filteredItems.current.findIndex(item => item.uid === node.uid)
             virtuosoRef.current.scrollIntoView({
               index,
-              behavior:  immediately ? 'auto' : 'smooth',
+              behavior: immediately ? 'auto' : 'smooth',
               align: 'center'
             });
             console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
