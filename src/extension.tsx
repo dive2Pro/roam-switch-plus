@@ -460,7 +460,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
   const madeActiveItemChange = async (item: TreeNode3, immediately = false) => {
     setActiveItem(item)
-    await delay(10)
+    await delay(100)
     console.log(item, ' --- delay')
     scrollToActiveItem(item, immediately)
     api.focusOnBlockWithoughtHistory(item.uid)
@@ -501,6 +501,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setQuery(query)
   }
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const filteredItems = useRef<TreeNode3[]>([]);
   let scrollToActiveItem = (item: TreeNode3, immediately: boolean) => { };
   // console.log(query, passProps, itemsSource)
   return (
@@ -537,14 +538,15 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         query={query}
         noResults={<MenuItem disabled={true} text="No results." />}
         itemListRenderer={(itemListProps) => {
+          filteredItems.current = itemListProps.filteredItems;
           scrollToActiveItem = (node: TreeNode3, immediately = false) => {
-            const index = itemListProps.filteredItems.findIndex(item => item.uid === node.uid)
+            const index = filteredItems.current.findIndex(item => item.uid === node.uid)
             virtuosoRef.current.scrollIntoView({
               index,
               behavior:  immediately ? 'auto' : 'smooth',
               align: 'center'
             });
-            // console.log(index, ' = index', itemListProps.activeItem)
+            console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
           }
 
           return <Menu><Virtuoso

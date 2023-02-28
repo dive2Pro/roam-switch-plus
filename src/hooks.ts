@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 
-export function useEvent<T extends () => void>(cb: T) {
+export function useEvent<T extends () => any>(cb: T) {
     const refCb = useRef(cb);
     refCb.current = cb;
 
