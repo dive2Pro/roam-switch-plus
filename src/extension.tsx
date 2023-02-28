@@ -325,16 +325,17 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
     e.preventDefault();
     e.stopPropagation();
-    selected.current = !e.shiftKey
     const handles = {
       right: () => {
         api.selectingBlockByUid(item.uid, true);
       },
       top: async () => {
+        changeSelected(!e.shiftKey)
         const newUid = await api.insertBlockByUid(item.uid, item.order)
         api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
       },
       bottom: async () => {
+        changeSelected(!e.shiftKey)
         const newUid = await api.insertBlockByUid(item.uid, item.order + 1)
         api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
       }
@@ -470,11 +471,14 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     } else {
       setTimeout(() => {
         setQuery("")
-        selected.current = false;
+        changeSelected(false)
       }, 20)
     }
   }, [isOpen])
   const selected = useRef(false)
+  function changeSelected(next: boolean) {
+    selected.current = next;
+  }
   const handleClose = () => {
     setOpen(false)
   }
@@ -517,7 +521,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         onClose={onDialogClose}
         onItemSelect={async (item: { uid: string }, e) => {
           const shiftKeyPressed = (e as any).shiftKey;
-          selected.current = !shiftKeyPressed;
+          changeSelected(!shiftKeyPressed)
           onDialogClose();
           api.selectingBlockByUid(item.uid, shiftKeyPressed);
         }}
