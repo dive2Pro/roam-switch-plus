@@ -41,6 +41,10 @@ const isSidebarItem = (item: ITEM): item is SideBarItem => {
 }
 let oldHref = ''
 const api = {
+  async openRightsidebar() {
+    await window.roamAlphaAPI.ui.rightSidebar.open();
+    await delay(10)
+  },
   toggleSidebarWindow(sidebarItem: SideBarItem) {
     simulateClick(sidebarItem.dom.querySelector(".rm-caret"))
   },
@@ -409,6 +413,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Sidebar Mode',
       "default-hotkey": ['super-shift-u'],
       async callback() {
+        await api.openRightsidebar();
         if (!refs.current.isOpen) {
           await initData()
         }
