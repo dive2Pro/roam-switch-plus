@@ -158,8 +158,8 @@ const api = {
       const orderSort = (a: TreeNode3, b: TreeNode3) => {
         return a.order - b.order
       }
-
-      node.children = node.children.map(_sortByOrder).sort(orderSort)
+      if (node.children)
+        node.children = node.children.map(_sortByOrder).sort(orderSort)
       return node;
     }
     const tree = window.roamAlphaAPI.q(`[:find (pull ?b [
@@ -321,7 +321,21 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   });
   refs.current.isOpen = isOpen;
   refs.current.query = query
+  const getSidebarModeData = () => {
+    const rightSidebarItems = api.getRightSidebarItems()
+    return rightSidebarItems.concat([
+      {
+        dom: {},
+        type: 'custom', title: 'Clear Sidebar', uid: 'clean-sidebar', icon: 'remove',
+        onClick() {
+          rightSidebarItems.forEach(item => {
+            onRightMenuClick(item, 'remove', { preventDefault: () => { }, stopPropagation: () => { } } as React.MouseEvent<HTMLElement>)
+          })
+        }
+      },
+    ] as SideBarItem[])
 
+  }
   const initData = async () => {
     api.recordPageAndScrollPosition();
     const pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
@@ -339,22 +353,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
     const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid));
 
-    const rightSidebarItems = api.getRightSidebarItems()
     setSources({
       lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
       tagMode: flatted[2].filter(item => item.text),
-      sidebarMode: rightSidebarItems.concat([
-        {
-          dom: {},
-          type: 'custom', title: 'Clear Sidebar', uid: 'clean-sidebar', icon: 'remove',
-          onClick() {
-            rightSidebarItems.forEach(item => {
-              onRightMenuClick(item, 'remove', { preventDefault: () => { }, stopPropagation: () => { } } as React.MouseEvent<HTMLElement>)
-            })
-          }
-        },
-      ] as SideBarItem[])
+      sidebarMode: getSidebarModeData()
     });
 
     // 默认
@@ -416,6 +419,14 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         await api.openRightsidebar();
         if (!refs.current.isOpen) {
           await initData()
+        } else {
+          setSources(prev => {
+            return {
+              ...prev,
+              sidebarMode: getSidebarModeData()
+            }
+          })
+          await delay(20)
         }
         open();
         resetInputWithMode("r:")
@@ -849,7 +860,8 @@ function flatTree(node: TreeNode3) {
     })
   }
 
-  node.children.forEach((childNode, index) => {
+  
+  node.children?.forEach((childNode, index) => {
     flat(childNode, (index + 1) + '', 0)
   })
   return [lineBlocks, blocks, taggedBlocks] as const;
