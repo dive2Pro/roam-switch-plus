@@ -7,6 +7,7 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import "./style.less";
 import { TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
+import { simulateClick } from "./helper";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -31,16 +32,24 @@ type SideBarItem = {
     | { type: "mentions", "mentions-uid": string }
   )
 
+type ITEM = SideBarItem | TreeNode3;
+
+const isSidebarItem = (item: ITEM): item is SideBarItem => {
+  return 'dom' in item
+}
 let oldHref = ''
 const api = {
   toggleSidebarWindow(sidebarItem: SideBarItem) {
-    window.roamAlphaAPI.ui.rightSidebar.collapseWindow({
-      window: sidebarItem
-    })
+    simulateClick(sidebarItem.dom.querySelector(".rm-caret"))
   },
-  removeSidebarWindow(sidebarItem: SideBarItem) { },
+  removeSidebarWindow(sidebarItem: SideBarItem) {
+    simulateClick(sidebarItem.dom.querySelector(".bp3-icon-cross"))
+  },
   getRightSidebarItems() {
     const parentEl = document.querySelector(".sidebar-content");
+    if (!parentEl) {
+      return []
+    }
     return window.roamAlphaAPI.ui.rightSidebar.getWindows().map((sidebarItemWindow, index) => {
       let title = '';
       const dom = parentEl.children[index] as HTMLDivElement;
@@ -267,13 +276,13 @@ const SidebarRightMenu: FC<{
     <ButtonGroup>
       <Tooltip
         content={
-          <span>Toggle sidebar</span>
+          <span>Toggle in sidebar</span>
         }>
         <Button icon="segmented-control" onClick={e => props.onClick('switch', e)} />
       </Tooltip>
       <Tooltip
         content={
-          <span>Open in sidebar</span>
+          <span>Remove from sidebar</span>
         }>
         <Button icon="small-cross" onClick={e => props.onClick('remove', e)} />
       </Tooltip>
@@ -382,7 +391,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     refs.current.isOpen = true;
     refs.current.isClosing = false;
     setOpen(true);
-    await delay(200);
     refs.current.isOpen = false;
   }
 
@@ -404,26 +412,37 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     const handles = {
       right: () => {
         api.selectingBlockByUid(item.uid, true);
+
       },
       top: async () => {
         changeSelected(!e.shiftKey)
         const newUid = await api.insertBlockByUid(item.uid, item.order)
         api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
+        onDialogClose();
+
       },
       bottom: async () => {
         changeSelected(!e.shiftKey)
         const newUid = await api.insertBlockByUid(item.uid, item.order + 1)
         api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
+        onDialogClose();
       },
       switch: () => {
         api.toggleSidebarWindow(item as SideBarItem)
       },
       remove: () => {
         api.removeSidebarWindow(item as SideBarItem)
+        setSources(prev => {
+          return {
+            ...prev,
+            sidebarMode: prev.sidebarMode.filter(_m => {
+              return _m.uid !== item.uid
+            })
+          }
+        })
       }
     }
     await handles[type]();
-    onDialogClose();
   }
   // 记录当前网址和滑动的距离
   // 
@@ -546,6 +565,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `} >
                 {item.title}
+                <SidebarRightMenu onClick={(type, e) => { onRightMenuClick(item, type, e) }} />
               </div>
             }
             onClick={itemProps.handleClick}>
@@ -561,8 +581,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     const uid = oldHref.split("/").pop();
     const activeItem = itemsSource.find(item => item.uid === uid)
     console.log(uid, ' = uid item', activeItem)
-    if (activeItem)
+    if (activeItem) {
+      setActiveItem(activeItem)
       madeActiveItemChange(activeItem, true)
+
+    }
   })
 
   const focusSidebarWindow = async (item: SideBarItem) => {
@@ -580,7 +603,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
 
   const madeActiveItemChange = async (item: TreeNode3 | SideBarItem, immediately = false) => {
-    await delay(100)
+    await delay(10)
     console.log(item, ' --- delay')
     if ('dom' in item) {
       focusSidebarWindow(item)
@@ -643,7 +666,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           inputRef: inputRef
         }}
         onClose={onDialogClose}
-        onItemSelect={async (item: { uid: string }, e) => {
+        onItemSelect={async (item: TreeNode3 | SideBarItem, e) => {
+          if (isSidebarItem(item)) {
+            return;
+          }
           const shiftKeyPressed = (e as any).shiftKey;
           changeSelected(!shiftKeyPressed)
           onDialogClose();
@@ -658,15 +684,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           if (!_activeItem) {
             return;
           }
+
+          // right side bar mode
           if ('dom' in _activeItem) {
             setActiveItem(_activeItem)
             focusSidebarWindow(_activeItem)
             return;
           }
-          if (selected.current || refs.current.isOpen) {
+          console.log(activeItem, ' --active change-- ', _activeItem, refs.current.isOpen);
+
+          if (selected.current || refs.current.isClosing) {
             return
           }
-          console.log(activeItem, ' --active change-- ', _activeItem);
           setActiveItem(_activeItem)
           madeActiveItemChange(_activeItem)
         }}
