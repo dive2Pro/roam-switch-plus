@@ -1,6 +1,6 @@
 import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from 'react-dom';
-import { Button, ButtonGroup, InputGroup, Menu, MenuItem, Tag, Tooltip } from "@blueprintjs/core";
+import { Button, ButtonGroup, Icon, IconName, InputGroup, Menu, MenuItem, Tag, Tooltip } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
@@ -24,8 +24,10 @@ type SideBarItem = {
   dom: Element;
   title: string;
   uid: string;
+  icon?: IconName,
 } & (
-    { type: "search-query" }
+    { type: 'custom', onClick: () => void }
+    | { type: "search-query" }
     | { type: "graph", "page-uid": string }
     | { type: 'block', "block-uid": string }
     | { type: 'outline', "page-uid": string }
@@ -52,6 +54,13 @@ const api = {
     }
     return window.roamAlphaAPI.ui.rightSidebar.getWindows().map((sidebarItemWindow, index) => {
       let title = '';
+      const icons: Record<'search-query' | 'graph' | 'block' | 'outline' | 'mentions', string> = {
+        'search-query': 'panel-stats',
+        graph: 'graph',
+        "block": "symbol-circle",
+        "mentions": "properties",
+        "outline": 'application'
+      };
       const dom = parentEl.children[index] as HTMLDivElement;
       // @ts-ignore
       if (sidebarItemWindow.type === 'search-query' || sidebarItemWindow.type === 'graph'
@@ -72,6 +81,7 @@ const api = {
         uid: sidebarItemWindow["window-id"],
         dom,
         title,
+        icon: icons[sidebarItemWindow.type]
       } as SideBarItem
     });
   },
@@ -325,11 +335,22 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
     const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid));
 
+    const rightSidebarItems = api.getRightSidebarItems()
     setSources({
       lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
       tagMode: flatted[2].filter(item => item.text),
-      sidebarMode: api.getRightSidebarItems()
+      sidebarMode: rightSidebarItems.concat([
+        {
+          dom: {},
+          type: 'custom', title: 'Clear Sidebar', uid: 'clean-sidebar', icon: 'remove',
+          onClick() {
+            rightSidebarItems.forEach(item => {
+              onRightMenuClick(item, 'remove', { preventDefault: () => { }, stopPropagation: () => { } } as React.MouseEvent<HTMLElement>)
+            })
+          }
+        },
+      ] as SideBarItem[])
     });
 
     // 默认
@@ -384,6 +405,17 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         resetInputWithMode(":")
       },
     })
+    props.extensionAPI.ui.commandPalette.addCommand({
+      label: 'Open Switch+ in Sidebar Mode',
+      "default-hotkey": ['super-shift-u'],
+      async callback() {
+        if (!refs.current.isOpen) {
+          await initData()
+        }
+        open();
+        resetInputWithMode("r:")
+      },
+    })
   }, []);
 
 
@@ -432,6 +464,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       },
       remove: () => {
         api.removeSidebarWindow(item as SideBarItem)
+        console.log(item, ' removing ')
         setSources(prev => {
           return {
             ...prev,
@@ -461,7 +494,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         // console.log(item, ' = render', itemProps)
         return <MenuItem
           style={{
-            paddingLeft: (item.parents?.length || 0) * 10
+            paddingLeft: (item.parents?.length || 0) * 15
           }}
           {...itemProps.modifiers}
           text={
@@ -549,7 +582,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       }
     },
     "s:": defaultFn,
-    ">": (str) => {
+    "r:": (str) => {
       return {
         items: (_sources: typeof sources) => _sources.sidebarMode,
         itemPredicate(query, item: SideBarItem) {
@@ -557,6 +590,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         },
         itemRenderer(item: SideBarItem, itemProps: IItemRendererProps) {
           // console.log(item, ' = render', itemProps, query, sources.tagMode)
+          let content = <>
+            <Button icon={item.icon}
+              active={false}
+              fill minimal alignText="left" text={item.title}
+              rightIcon={
+                <SidebarRightMenu onClick={(type, e) => { onRightMenuClick(item, type, e) }} />
+              }
+            />
+          </>
+          if (item.type === 'custom') {
+            content = <>
+              <Button icon={item.icon} fill minimal alignText="left" text={item.title} />
+            </>
+          }
           return <MenuItem
             {...itemProps.modifiers}
             text={
@@ -564,11 +611,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 className={`switch-result-item
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `} >
-                {item.title}
-                <SidebarRightMenu onClick={(type, e) => { onRightMenuClick(item, type, e) }} />
+                {content}
               </div>
             }
-            onClick={itemProps.handleClick}>
+            onClick={item.type === 'custom' ? itemProps.handleClick : () => {
+              setActiveItem(item);
+              focusSidebarWindow(item);
+            }}>
           </MenuItem>
         }
       }
@@ -593,7 +642,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       return;
     }
     setTimeout(() => {
-      item.dom.scrollIntoView({
+      item.dom.scrollIntoView?.({
         behavior: 'smooth',
         block: 'start'
       });
@@ -668,6 +717,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         onClose={onDialogClose}
         onItemSelect={async (item: TreeNode3 | SideBarItem, e) => {
           if (isSidebarItem(item)) {
+            if (item.type === 'custom') {
+              item.onClick();
+            }
             return;
           }
           const shiftKeyPressed = (e as any).shiftKey;
