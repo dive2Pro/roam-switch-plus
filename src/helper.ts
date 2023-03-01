@@ -27,3 +27,17 @@ export const appendToTopbar = (name: string) => {
   }
   return checkForButton;
 };
+
+
+export const simulateClick = (clickEl: Element) => {
+  "mouseover mousedown mouseup click".split(" ").forEach((type) => {
+    clickEl.dispatchEvent(
+      new MouseEvent(type, {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        buttons: 1
+      })
+    );
+  });
+}
