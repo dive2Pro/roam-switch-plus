@@ -30,7 +30,7 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 - How to start:
   - Default shortcut: cmd+shift+o.
-  - Type a hashtag (#) to start.
+  - Type a "@" to start.
 - What's in the result:
   - All tags on the current page.
 
