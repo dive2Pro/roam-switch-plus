@@ -13,7 +13,7 @@ import { simulateClick } from "./helper";
 const delay = (ms?: number) => new Promise(resolve => {
   setTimeout(resolve, ms)
 })
-type TreeNode2 = Omit<TreeNode, 'children'> & { parents: string[], children: TreeNode2[], deep: string, refs?: { id: number }[] }
+type TreeNode2 = Omit<TreeNode, 'children'> & { parents: { id: string }[], children: TreeNode2[], deep: string, refs?: { id: number }[] }
 type TreeNode3 = Omit<TreeNode2, 'refs'> & { tags: { type: 'page' | 'block', text: string }[] }
 
 type SideBarItem = {
@@ -41,6 +41,20 @@ const isSidebarItem = (item: ITEM): item is SideBarItem => {
 }
 let oldHref = ''
 const api = {
+  focusOnBlock(item: TreeNode3) {
+    window.roamAlphaAPI.ui.setBlockFocusAndSelection({
+      location: {
+        "block-uid": item.uid,
+        "window-id": 'main-window'
+      }
+    })
+  },
+  async checkIsUnderCurrentBlock(item: TreeNode3) {
+    const openUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+    const openId = window.roamAlphaAPI.q(`[:find ?e . :where [?e :block/uid "${openUid}"]]`) as unknown as string
+    console.log(item.parents.some(p => p.id === openId), ' is Under ', item, openUid)
+    return item.parents.some(p => p.id === openId)
+  },
   async openRightsidebar() {
     await window.roamAlphaAPI.ui.rightSidebar.open();
     await delay(10)
@@ -378,6 +392,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     findActiveItem()
   }
   useEffect(() => {
+    props.extensionAPI.settings.panel.create({
+      tabTitle: 'Switch+',
+
+    })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+',
       "default-hotkey": ['super-shift-p'],
@@ -667,11 +685,21 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     console.log('dom; ', item)
   }
 
+  const focusOnItem = async (item: TreeNode3) => {
+    if (await api.checkIsUnderCurrentBlock(item)) {
+      api.focusOnBlock(item)
+      return true;
+    }
+  }
   const madeActiveItemChange = async (item: TreeNode3 | SideBarItem, immediately = false) => {
     await delay(10)
     console.log(item, ' --- delay')
-    if ('dom' in item) {
+    if (isSidebarItem(item)) {
       focusSidebarWindow(item)
+      return
+    }
+
+    if (await focusOnItem(item)) {
       return
     }
     scrollToActiveItem(item, immediately)
@@ -730,18 +758,24 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         inputProps={{
           inputRef: inputRef
         }}
-        onClose={onDialogClose}
+        onClose={(e) => {
+          // console.log(e, e.type, ' ----@type')
+          onDialogClose()
+        }}
         onItemSelect={async (item: TreeNode3 | SideBarItem, e) => {
           if (isSidebarItem(item)) {
             if (item.type === 'custom') {
               item.onClick();
             }
+            onDialogClose()
             return;
           }
           const shiftKeyPressed = (e as any).shiftKey;
           changeSelected(!shiftKeyPressed)
           onDialogClose();
-          api.selectingBlockByUid(item.uid, shiftKeyPressed);
+          if (!await focusOnItem(item)) {
+            api.selectingBlockByUid(item.uid, shiftKeyPressed);
+          }
         }}
         {...passProps}
         items={itemsSource}
@@ -860,7 +894,7 @@ function flatTree(node: TreeNode3) {
     })
   }
 
-  
+
   node.children?.forEach((childNode, index) => {
     flat(childNode, (index + 1) + '', 0)
   })
@@ -902,3 +936,5 @@ function getRefStringByUid(uid: string) {
   ]);
   return block ? block[":block/string"] : "";
 }
+
+
