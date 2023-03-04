@@ -4,12 +4,13 @@
 
 # 4 Modes
 
-There are 4 modes you can use to help you navigate between blocks.
+There are modes you can use to help you navigate between blocks.
 
 - Text Mode
 - Tag Mode
 - Line Mode
 - Sidebar Mode
+- Latest Changes Mode
 
 You can easily switch to another mode by using keyboard shortcuts or changing the specific keywords in the inputs, and you can use the arrow up and down keys to change the selection.
 
@@ -55,6 +56,13 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 ---
 
+## Latest Changes Mode
+
+- How to start:
+  - Default shortcut: cmd+shift+e.
+  - Type "e:" to start.
+- What's in the result:
+  - All blocks that change within 24 hours across the graph.
 
 ## Right Sidebar Mode
 

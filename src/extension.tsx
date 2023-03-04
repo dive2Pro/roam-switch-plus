@@ -5,7 +5,7 @@ import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
 import "./style.less";
-import { TreeNode } from "roamjs-components/types";
+import { PullBlock, TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
 import { simulateClick } from "./helper";
 
@@ -13,8 +13,8 @@ import { simulateClick } from "./helper";
 const delay = (ms?: number) => new Promise(resolve => {
   setTimeout(resolve, ms)
 })
-type TreeNode2 = Omit<TreeNode, 'children'> & { parents: { id: string }[], children: TreeNode2[], deep: string, refs?: { id: number }[] }
-type TreeNode3 = Omit<TreeNode2, 'refs'> & { tags: { type: 'page' | 'block', text: string }[] }
+type TreeNode2 = Omit<TreeNode, 'children'> & { parents: { id: string }[], children: TreeNode2[], deep: string, refs?: { id: number }[], time: number }
+type TreeNode3 = Omit<TreeNode2, 'refs' | "chilren"> & { tags: { type: 'page' | 'block', text: string }[], string?: string }
 
 type SideBarItem = {
   "collapsed?": boolean
@@ -41,6 +41,29 @@ const isSidebarItem = (item: ITEM): item is SideBarItem => {
 }
 let oldHref = ''
 const api = {
+  getAllChangesWithin1Day() {
+    const now = new Date();  // 获取当前时间
+    const oneDayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));  // 获取 24 小时前的时间
+    const timestamp = Math.floor(oneDayAgo.getTime());
+
+    return (window.roamAlphaAPI.data.q(
+      `
+    [
+            :find [(pull ?e [*]) ...]
+            :in $ ?start_of_day
+            :where                
+                [?e :edit/time ?time]
+                [(> ?time ?start_of_day)]
+        ]
+    `,
+      timestamp
+    ) as unknown as TreeNode3[]
+    ).sort((a, b) => {
+      // console.log(a, ' --- aaa')
+      // return b[":edit/time"] - a[":edit/time"]
+      return b.time - a.time
+    }).filter(item => item.string)
+  },
   focusOnBlock(item: TreeNode3) {
     window.roamAlphaAPI.ui.setBlockFocusAndSelection({
       location: {
@@ -77,7 +100,7 @@ const api = {
         graph: 'graph',
         "block": "symbol-circle",
         "mentions": "properties",
-        "outline": 'application'
+        "outline": 'application',
       };
       const dom = parentEl.children[index] as HTMLDivElement;
       // @ts-ignore
@@ -324,6 +347,19 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
 
 }
 
+function BlockDiv(props: { uid: string, "zoom-path"?: boolean }) {
+  const ref = useRef<HTMLDivElement>()
+  useEffect(() => {
+    window.roamAlphaAPI.ui.components.renderBlock({
+      uid: props.uid,
+      el: ref.current,
+      // @ts-ignore
+      "zoom-path?": props["zoom-path"]
+    })
+  }, [])
+  return <div ref={ref} />
+}
+
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
   const [query, setQuery] = useState("")
@@ -371,7 +407,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
       tagMode: flatted[2].filter(item => item.text),
-      sidebarMode: getSidebarModeData()
+      sidebarMode: getSidebarModeData(),
+      changedMode: api.getAllChangesWithin1Day()
     });
 
     // 默认
@@ -450,6 +487,17 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         resetInputWithMode("r:")
       },
     })
+    props.extensionAPI.ui.commandPalette.addCommand({
+      label: 'Open Switch+ in Latest Edit Mode',
+      "default-hotkey": ['super-shift-e'],
+      async callback() {
+        if (!refs.current.isOpen) {
+          await initData()
+        }
+        open();
+        resetInputWithMode("e:")
+      },
+    })
   }, []);
 
 
@@ -469,7 +517,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     'lineMode': TreeNode3[],
     'strMode': TreeNode3[],
     'tagMode': TreeNode3[],
-    'sidebarMode': SideBarItem[]
+    'sidebarMode': SideBarItem[],
+    'changedMode': TreeNode3[]
   }>({} as any);
 
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
@@ -655,6 +704,51 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           </MenuItem>
         }
       }
+    },
+    "e:": (str) => {
+      return {
+        items: (_sources: typeof sources) => _sources.changedMode,
+        itemPredicate(query, item: TreeNode3) {
+          return item.string.toLowerCase().includes(str.toLowerCase())
+        },
+        itemRenderer(item: TreeNode3, itemProps: IItemRendererProps) {
+          // console.log(item, ' = render', itemProps, query, sources.tagMode)
+          let content = <>
+            <Button
+              active={false}
+              fill minimal alignText="left" text={
+                highlightText(item.string, str)
+              }
+              rightIcon={
+                <div className="right-menu">
+                  <Tooltip
+                    content={
+                      <span>Open in sidebar</span>
+                    }>
+                    <Button icon="arrow-right" onClick={e => {
+                      api.selectingBlockByUid(item.uid, true);
+                    }} />
+                  </Tooltip>
+                </div>
+              }
+            />
+          </>
+          return <MenuItem
+            {...itemProps.modifiers}
+            text={
+              <div
+                className={`switch-result-item
+                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
+                               `} >
+                {content}
+              </div>
+            }
+            onClick={(e) => {
+              itemProps.handleClick(e)
+            }}>
+          </MenuItem>
+        }
+      }
     }
   }
 
@@ -756,7 +850,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         scrollToActiveItem
         activeItem={activeItem}
         inputProps={{
-          inputRef: inputRef
+          inputRef: inputRef,
+          placeholder: 'search blocks by content (append : to go to line or @ to go to refs)'
         }}
         onClose={(e) => {
           // console.log(e, e.type, ' ----@type')
@@ -778,6 +873,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           }
         }}
         {...passProps}
+        itemRenderer={(item, itemProps) => {
+
+          return passProps.itemRenderer(item, {
+            ...itemProps, handleClick: (e) => {
+              if (e.shiftKey) {
+                api.selectingBlockByUid(item.uid, true)
+              } else {
+                itemProps.handleClick(e)
+              }
+            }
+          })
+        }}
         items={itemsSource}
         onQueryChange={(query) => {
           handleQueryChange(query)
