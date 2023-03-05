@@ -75,7 +75,7 @@ const api = {
   async checkIsUnderCurrentBlock(item: TreeNode3) {
     const openUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
     const openId = window.roamAlphaAPI.q(`[:find ?e . :where [?e :block/uid "${openUid}"]]`) as unknown as string
-    console.log(item.parents.some(p => p.id === openId), ' is Under ', item, openUid)
+    // console.log(item.parents.some(p => p.id === openId), ' is Under ', item, openUid)
     return item.parents.some(p => p.id === openId)
   },
   async openRightsidebar() {
@@ -360,16 +360,16 @@ function BlockDiv(props: { uid: string, "zoom-path"?: boolean }) {
   return <div ref={ref} />
 }
 
+let lastedCloseTime: number
+let AppIsOpen = false;
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
   const [query, setQuery] = useState("")
   const inputRef = useRef<HTMLInputElement>()
   const refs = useRef({
-    isOpen: false,
     query: '',
     isClosing: false
   });
-  refs.current.isOpen = isOpen;
   refs.current.query = query
   const getSidebarModeData = () => {
     const rightSidebarItems = api.getRightSidebarItems()
@@ -388,8 +388,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const initData = async () => {
     api.recordPageAndScrollPosition();
-    const pageOrBlockUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
-    if (!pageOrBlockUid) {
+
+    console.log(Date.now() - lastedCloseTime < 10000, ' ---@=')
+    if (!lastedCloseTime) {
+      lastedCloseTime = Date.now()
+    } else {
+      if ((Date.now() - lastedCloseTime) < (1000 & 5)) {
+        console.log(' not now')
+        return;
+      }
+    }
+    const pageOrBlockUid = oldHref.split("/").pop()
+    if (!oldHref.includes("/page/")) {
       throw new Error("Not in a page")
     }
 
@@ -437,7 +447,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+',
       "default-hotkey": ['super-shift-p'],
       async callback() {
-        if (!refs.current.isOpen) {
+        if (!AppIsOpen) {
           await initData()
         }
         open();
@@ -448,7 +458,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Tag Mode',
       "default-hotkey": ['super-shift-o'],
       async callback() {
-        if (!refs.current.isOpen) {
+        if (!AppIsOpen) {
           await initData()
         }
         open();
@@ -460,7 +470,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Line Mode',
       "default-hotkey": ['super-shift-l'],
       async callback() {
-        if (!refs.current.isOpen) {
+        if (!AppIsOpen) {
           await initData()
         }
         open();
@@ -472,7 +482,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       "default-hotkey": ['super-shift-u'],
       async callback() {
         await api.openRightsidebar();
-        if (!refs.current.isOpen) {
+        if (!AppIsOpen) {
           await initData()
         } else {
           setSources(prev => {
@@ -491,7 +501,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Latest Edit Mode',
       "default-hotkey": ['super-shift-e'],
       async callback() {
-        if (!refs.current.isOpen) {
+        if (!AppIsOpen) {
           await initData()
         }
         open();
@@ -502,10 +512,14 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
 
   const open = async () => {
-    refs.current.isOpen = true;
+    AppIsOpen = true;
     refs.current.isClosing = false;
     setOpen(true);
-    refs.current.isOpen = false;
+    setTimeout(() => {
+      AppIsOpen = false;
+
+    }, 120)
+
   }
 
   const [passProps, setPassProps] = useState<PassProps>({
@@ -815,6 +829,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const handleClose = () => {
     refs.current.isClosing = true;
     setOpen(false)
+    lastedCloseTime = Date.now()
   }
   const onDialogClose = () => {
     // api.clearHistory
@@ -900,11 +915,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             focusSidebarWindow(_activeItem)
             return;
           }
-          console.log(activeItem, ' --active change-- ', _activeItem, refs.current.isOpen);
 
-          if (selected.current || refs.current.isClosing) {
+          if (selected.current || refs.current.isClosing || AppIsOpen) {
             return
           }
+
+          console.log(activeItem, ' --active change-- ', _activeItem, AppIsOpen);
+
           setActiveItem(_activeItem)
           madeActiveItemChange(_activeItem)
         }}
@@ -932,6 +949,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               return itemListProps.renderItem(itemListProps.filteredItems[index], index)
             }} />
           </Menu>
+        }}
+        overlayProps={{
+          portalClassName: isOpen ? 'open-portal' : 'close-portal'
         }}
       />
     </div >
