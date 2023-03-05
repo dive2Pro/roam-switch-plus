@@ -7,7 +7,7 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import "./style.less";
 import { PullBlock, TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
-import { simulateClick } from "./helper";
+import { formatDate, simulateClick } from "./helper";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -43,7 +43,7 @@ let oldHref = ''
 const api = {
   getAllChangesWithin1Day() {
     const now = new Date();  // 获取当前时间
-    const oneDayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));  // 获取 24 小时前的时间
+    const oneDayAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));  // 获取 24 小时前的时间
     const timestamp = Math.floor(oneDayAgo.getTime());
 
     return (window.roamAlphaAPI.data.q(
@@ -771,8 +771,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               <div
                 className={`switch-result-item
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
-                               `} >
+                               `}
+                style={{ alignItems: 'end'}}
+              >
                 {content}
+                <small style={{ minWidth: 110, opacity: 0.6, textAlign: 'end' }}>{formatDate(new Date(item.time))}</small>
               </div>
             }
             onClick={(e) => {

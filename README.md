@@ -62,7 +62,7 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
   - Default shortcut: cmd+shift+e.
   - Type "e:" to start.
 - What's in the result:
-  - All blocks that change within 24 hours across the graph.
+  - All blocks that change within 48 hours across the graph.
 
 ## Right Sidebar Mode
 
