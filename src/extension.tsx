@@ -609,6 +609,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             </div>
           }
           onClick={(e) => {
+            if (e.shiftKey) {
+              api.selectingBlockByUid(item.uid, true)
+              return;
+            }
             setActiveItemByItem(item);
           }}
           onDoubleClick={e => {
@@ -646,6 +650,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               </div>
             }
             onClick={(e) => {
+              if (e.shiftKey) {
+                api.selectingBlockByUid(item.uid, true)
+                return;
+              }
               setActiveItemByItem(item);
             }}
             onDoubleClick={e => {
@@ -685,6 +693,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               </div>
             }
             onClick={(e) => {
+              if (e.shiftKey) {
+                api.selectingBlockByUid(item.uid, true)
+                return;
+              }
               setActiveItemByItem(item);
             }}
             onDoubleClick={e => {
@@ -727,7 +739,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 {content}
               </div>
             }
-            onClick={item.type === 'custom' ? itemProps.handleClick : () => {
+            onClick={item.type === 'custom' ? itemProps.handleClick : (e) => {
               setActiveItem(item);
               focusSidebarWindow(item);
             }}>
@@ -777,6 +789,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               </div>
             }
             onClick={(e) => {
+              if (e.shiftKey) {
+                api.selectingBlockByUid(item.uid, true)
+                return;
+              }
               setActiveItemByItem(item);
             }}
             onDoubleClick={e => {
