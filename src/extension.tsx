@@ -723,9 +723,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             {...itemProps.modifiers}
             text={
               <div
-                className={`switch-result-item
-                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
-                               `} >
+                className={`switch-result-item ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}`} >
                 {content}
               </div>
             }
@@ -772,7 +770,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 className={`switch-result-item
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `}
-                style={{ alignItems: 'end'}}
+                style={{ alignItems: 'end' }}
               >
                 {content}
                 <small style={{ minWidth: 110, opacity: 0.6, textAlign: 'end' }}>{formatDate(new Date(item.time))}</small>
@@ -914,7 +912,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           changeSelected(!shiftKeyPressed)
           onDialogClose();
           if (query.startsWith("e:")) {
-            
+
           }
           // if (!await focusOnItem(item)) {
           api.selectingBlockByUid(item.uid, shiftKeyPressed);
@@ -972,13 +970,14 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
           }
 
-          return <Menu><Virtuoso
-            ref={virtuosoRef}
-            style={{ height: '400px' }}
-            totalCount={itemListProps.filteredItems.length}
-            itemContent={index => {
-              return itemListProps.renderItem(itemListProps.filteredItems[index], index)
-            }} />
+          return <Menu >
+            <Virtuoso
+              ref={virtuosoRef}
+              style={{ height: '400px' }}
+              totalCount={itemListProps.filteredItems.length}
+              itemContent={index => {
+                return itemListProps.renderItem(itemListProps.filteredItems[index], index)
+              }} />
           </Menu>
         }}
         overlayProps={{
