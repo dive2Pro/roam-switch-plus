@@ -608,7 +608,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
             </div>
           }
-          onClick={itemProps.handleClick}>
+          onClick={(e) => {
+            setActiveItemByItem(item);
+          }}
+          onDoubleClick={e => {
+            itemProps.handleClick(e)
+          }}
+        >
         </MenuItem>
       }
     };
@@ -639,7 +645,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
               </div>
             }
-            onClick={itemProps.handleClick}>
+            onClick={(e) => {
+              setActiveItemByItem(item);
+            }}
+            onDoubleClick={e => {
+              itemProps.handleClick(e)
+            }}
+          >
           </MenuItem>
         }
       }
@@ -672,7 +684,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
               </div>
             }
-            onClick={itemProps.handleClick}>
+            onClick={(e) => {
+              setActiveItemByItem(item);
+            }}
+            onDoubleClick={e => {
+              itemProps.handleClick(e)
+            }}
+          >
           </MenuItem>
         }
 
@@ -758,12 +776,21 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               </div>
             }
             onClick={(e) => {
+              setActiveItemByItem(item);
+            }}
+            onDoubleClick={e => {
               itemProps.handleClick(e)
-            }}>
+            }}
+          >
           </MenuItem>
         }
       }
     }
+  }
+  function setActiveItemByItem(item: TreeNode3 | SideBarItem) {
+
+    setActiveItem(item)
+    madeActiveItemChange(item)
   }
 
   const itemsSource = passProps.items(sources)
@@ -808,7 +835,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     }
 
     if (await focusOnItem(item)) {
-      return
+      // return
     }
     scrollToActiveItem(item, immediately)
     api.focusOnBlockWithoughtHistory(item.uid)
@@ -883,9 +910,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           const shiftKeyPressed = (e as any).shiftKey;
           changeSelected(!shiftKeyPressed)
           onDialogClose();
-          if (!await focusOnItem(item)) {
-            api.selectingBlockByUid(item.uid, shiftKeyPressed);
+          if (query.startsWith("e:")) {
+            
           }
+          // if (!await focusOnItem(item)) {
+          api.selectingBlockByUid(item.uid, shiftKeyPressed);
+          // }
         }}
         {...passProps}
         itemRenderer={(item, itemProps) => {
@@ -921,9 +951,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           }
 
           console.log(activeItem, ' --active change-- ', _activeItem, AppIsOpen);
-
-          setActiveItem(_activeItem)
-          madeActiveItemChange(_activeItem)
+          setActiveItemByItem(_activeItem)
         }}
         resetOnQuery
         resetOnSelect
