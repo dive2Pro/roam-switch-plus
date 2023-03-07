@@ -8,6 +8,7 @@ import "./style.less";
 import { PullBlock, TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
 import { formatDate, simulateClick } from "./helper";
+import { ForbidEditRoamBlock } from "./forbird-edit-roam-block";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -248,6 +249,9 @@ function escapeRegExpChars(text: string) {
 
 
 function highlightText(text: string, query: string) {
+  if (!text) {
+    return text;
+  }
   let lastIndex = 0;
   const words = query
     .split(/\s+/)
@@ -412,7 +416,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       ]`) as unknown as string) || pageOrBlockUid;
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
     const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid));
-
     setSources({
       lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
@@ -425,7 +428,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     // setPassProps(defaultFn(""));
   }
 
-  const resetInputWithMode = (nextMode: string) => {
+  const resetInputWithMode = async (nextMode: string) => {
     const value = inputRef.current.value;
     const modeName = Object.keys(modes).find(mode => {
       return value.startsWith(mode)
@@ -435,8 +438,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       query = nextMode + value.substring(modeName.length)
     }
     handleQueryChange(query);
-    inputRef.current.setSelectionRange(nextMode.length, query.length)
     findActiveItem()
+    await delay(100)
+    inputRef.current.setSelectionRange(nextMode.length, query.length)
+
   }
   useEffect(() => {
     props.extensionAPI.settings.panel.create({
