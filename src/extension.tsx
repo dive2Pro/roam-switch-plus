@@ -451,6 +451,21 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     inputRef.current.setSelectionRange(nextMode.length, query.length)
 
   }
+  const openSidebar = async () => {
+    await api.openRightsidebar();
+    if (!AppIsOpen) {
+      await initData()
+    } else {
+      setSources(prev => {
+        return {
+          ...prev,
+          sidebarMode: getSidebarModeData()
+        }
+      })
+      await delay(20)
+    }
+
+  }
   useEffect(() => {
     props.extensionAPI.settings.panel.create({
       tabTitle: 'Switch+',
@@ -469,7 +484,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+ in Tag Mode',
-      "default-hotkey": ['super-shift-o'],
+      // "default-hotkey": ['super-shift-o'],
       async callback() {
         if (!AppIsOpen) {
           await initData()
@@ -481,7 +496,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+ in Line Mode',
-      "default-hotkey": ['super-shift-l'],
+      // "default-hotkey": ['super-shift-l'],
       async callback() {
         if (!AppIsOpen) {
           await initData()
@@ -492,27 +507,16 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+ in Sidebar Mode',
-      "default-hotkey": ['super-shift-u'],
+      // "default-hotkey": ['super-shift-u'],
       async callback() {
-        await api.openRightsidebar();
-        if (!AppIsOpen) {
-          await initData()
-        } else {
-          setSources(prev => {
-            return {
-              ...prev,
-              sidebarMode: getSidebarModeData()
-            }
-          })
-          await delay(20)
-        }
+        await openSidebar();
         open();
         resetInputWithMode("r:")
       },
     })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+ in Latest Edit Mode',
-      "default-hotkey": ['super-shift-e'],
+      // "default-hotkey": ['super-shift-e'],
       async callback() {
         if (!AppIsOpen) {
           await initData()
@@ -898,18 +902,21 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     handleClose();
   }
   const [activeItem, setActiveItem] = useState<TreeNode3 | SideBarItem>();
-  function handleQueryChange(query: string) {
+  async function handleQueryChange(_query: string) {
     const tag = Object.keys(modes).find(mode => {
-      if (query.startsWith(mode)) {
+      if (_query.startsWith(mode)) {
         return true;
       }
       return false;
     });
-    // console.log('handle query change: ', query)
+    // console.log('handle query change: ', query, tag)
+    if (tag === 'r:' && !query.startsWith('r:')) {
+      await openSidebar()
+    }
     const fn = modes[tag] || defaultFn;
-    const str = modes[tag] ? query.substring(tag.length) : query;
+    const str = modes[tag] ? _query.substring(tag.length) : _query;
     setPassProps(fn(str.trim()));
-    setQuery(query)
+    setQuery(_query)
   }
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const filteredItems = useRef<(TreeNode3 | SideBarItem)[]>([]);
