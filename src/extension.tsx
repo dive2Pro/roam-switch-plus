@@ -1,6 +1,6 @@
 import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from 'react-dom';
-import { Button, ButtonGroup, Icon, IconName, InputGroup, Menu, MenuItem, Tag, Tooltip } from "@blueprintjs/core";
+import { Button, ButtonGroup, Icon, IconName, InputGroup, Menu, MenuItem, Tag, Toaster, Tooltip } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
@@ -165,6 +165,7 @@ const api = {
       }
     })
     await delay(250)
+    // TOOD: just focus on it
     window.roamAlphaAPI.ui.setBlockFocusAndSelection({
       location: {
         "block-uid": uid,
@@ -351,6 +352,9 @@ export default function Extension(props: { isOpen: boolean, onClose: () => void 
 
 }
 
+const toast = Toaster.create({
+
+})
 function BlockDiv(props: { uid: string, "zoom-path"?: boolean }) {
   const ref = useRef<HTMLDivElement>()
   useEffect(() => {
@@ -404,7 +408,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     }
     const pageOrBlockUid = oldHref.split("/").pop()
     if (!oldHref.includes("/page/")) {
-      throw new Error("Not in a page")
+      toast.show({
+        message: 'Switch+ only works in a specific page',
+        intent: 'warning',
+        icon: 'hand',
+      }, 'switch+warning')
     }
 
     const pageUid = (window.roamAlphaAPI.q(`[
@@ -773,6 +781,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                       <span>Open in sidebar</span>
                     }>
                     <Button icon="arrow-right" onClick={e => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       api.selectingBlockByUid(item.uid, true);
                     }} />
                   </Tooltip>
@@ -824,7 +834,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     if (activeItem) {
       setActiveItem(activeItem)
       madeActiveItemChange(activeItem, true)
-
     }
   })
 
@@ -842,12 +851,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     console.log('dom; ', item)
   }
 
-  const focusOnItem = async (item: TreeNode3) => {
-    if (await api.checkIsUnderCurrentBlock(item)) {
-      api.focusOnBlock(item)
-      return true;
-    }
-  }
+  // const focusOnItem = async (item: TreeNode3) => {
+  //   if (await api.checkIsUnderCurrentBlock(item)) {
+  // api.focusOnBlock(item)
+  //     return true;
+  //   }
+  // }
   const madeActiveItemChange = async (item: TreeNode3 | SideBarItem, immediately = false) => {
     await delay(10)
     console.log(item, ' --- delay')
@@ -856,9 +865,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       return
     }
 
-    if (await focusOnItem(item)) {
-      // return
-    }
+    // if (await focusOnItem(item)) {
+    // return
+    // }
     scrollToActiveItem(item, immediately)
     api.focusOnBlockWithoughtHistory(item.uid)
   }
