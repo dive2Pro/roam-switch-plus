@@ -696,7 +696,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 {
                   item.tags?.map(ref => {
                     return <Tag
-                      icon={ref.type === 'page' ? 'git-new-branch' : 'new-link'}
+                      icon={ref.type === 'page' ? <span className="rm-icon-key-prompt">{`[[`}</span> : <span className="rm-icon-key-prompt">{`((`}</span>}
                       className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
                   })}
                 <small className="ellipsis">
