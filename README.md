@@ -2,7 +2,8 @@
 
 > An easy way to switch between blocks on a page
 
-# 4 Modes
+# Modes
+
 
 There are modes you can use to help you navigate between blocks.
 
@@ -30,7 +31,6 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 
 - How to start:
-  - Default shortcut: cmd+shift+o.
   - Type a "@" to start.
 - What's in the result:
   - All tags on the current page.
@@ -41,7 +41,6 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 
 - How to start:
-  - Default shortcut: cmd+shift+l.
   - Type a colon (:) to start.
 - What's in the result:
   - All blocks on the current page with titles based on their parent's level.
@@ -59,7 +58,6 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 ## Latest Changes Mode
 
 - How to start:
-  - Default shortcut: cmd+shift+e.
   - Type "e:" to start.
 - What's in the result:
   - All blocks that change within 48 hours across the graph.
@@ -69,7 +67,6 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 ![sidebar mode](https://user-images.githubusercontent.com/23192045/222135146-d975887d-d50c-4577-87d9-970f6441e480.gif)
 
 - How to start:
-  - Default shortcut: cmd+shift+u.
   - Type "r:" to start.
 - What's in the result:
   - All open windows in the right sidebar.
