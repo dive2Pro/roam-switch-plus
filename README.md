@@ -2,6 +2,10 @@
 
 > An easy way to switch between blocks on a page
 
+
+https://user-images.githubusercontent.com/23192045/230536636-6c6ef5b2-6b3a-46ce-9fa0-cb20fae2ee71.mov
+
+
 # Modes
 
 
