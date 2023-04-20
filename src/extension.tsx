@@ -238,9 +238,17 @@ const api = {
     hashes.push(uid);
     const newHash = hashes.join("/");
     var newUrl = location.origin + newHash;
-    // console.log(newUrl, ' newUrl');
-    await delay(1)
-    location.replace(newUrl);
+    // console.log(newUrl, newHash, ' newUrl');
+    await delay(10)
+    // location.replace(newUrl);
+    await delay(10)
+
+    // window.roamAlphaAPI.ui.mainWindow.openBlock({
+    //   block: {
+    //     uid
+    //   }
+    // })
+
   },
 }
 
@@ -873,7 +881,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     // return
     // }
     scrollToActiveItem(item, immediately)
-    api.focusOnBlockWithoughtHistory(item.uid)
+    await api.focusOnBlockWithoughtHistory(item.uid)
+    inputRef.current.focus()
   }
   useEffect(() => {
     if (isOpen) {
@@ -925,13 +934,16 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   return (
     <div>
       <Omnibar<TreeNode3 | SideBarItem>
-        className="rm-switchs"
+        className="rm-switches"
         isOpen={isOpen}
         scrollToActiveItem
         activeItem={activeItem}
         inputProps={{
           inputRef: inputRef,
-          placeholder: 'search blocks by content (append : to go to line or @ to go to refs)'
+          placeholder: '',
+          onBlur() {
+            console.log(" blur")
+          }
         }}
         onClose={(e) => {
           // console.log(e, e.type, ' ----@type')
@@ -1007,15 +1019,22 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
           }
 
-          return <Menu >
-            <Virtuoso
-              ref={virtuosoRef}
-              style={{ height: '400px' }}
-              totalCount={itemListProps.filteredItems.length}
-              itemContent={index => {
-                return itemListProps.renderItem(itemListProps.filteredItems[index], index)
-              }} />
-          </Menu>
+          console.log("________");
+          return <div>
+            <div className="flex">
+              <Menu >
+                <Virtuoso
+                  ref={virtuosoRef}
+                  style={{ height: '500px' }}
+                  totalCount={itemListProps.filteredItems.length}
+                  itemContent={index => {
+                    return itemListProps.renderItem(itemListProps.filteredItems[index], index)
+                  }} />
+              </Menu>
+              <Preview uid={activeItem?.uid} key={activeItem?.uid} />
+            </div>
+            <Hints />
+          </div>
         }}
         overlayProps={{
           portalClassName: isOpen ? 'open-portal' : 'close-portal'
@@ -1023,6 +1042,42 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       />
     </div >
   );
+}
+function Hints() {
+  return <div className={`${ID}-hints`}>
+    <span>
+      <span className="hint-icon">@</span><span> refs mode </span>
+    </span>
+    <span >
+      <span className="hint-icon">:</span><span> lines mode </span>
+    </span>
+    <span >
+      <span className="hint-icon">r:</span><span> right sidebar mode </span>
+    </span>
+    <span >
+      <span className="hint-icon">e:</span><span> changes in 48 hours  </span>
+    </span>
+  </div>
+}
+
+function Preview({ uid }: { uid: string }) {
+  const ref = useRef<HTMLDivElement>();
+  useEffect(() => {
+    if (uid) {
+
+      window.roamAlphaAPI.ui.components.renderBlock({
+        uid,
+        el: ref.current
+      })
+      return () => {
+
+      }
+    }
+
+  }, [uid])
+  return <div className={`${ID}-preview`}>
+    <div ref={ref} />
+  </div>
 }
 
 const ID = "rm-switches"
