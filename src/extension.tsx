@@ -14,7 +14,7 @@ import { ForbidEditRoamBlock } from "./forbird-edit-roam-block";
 const delay = (ms?: number) => new Promise(resolve => {
   setTimeout(resolve, ms)
 })
-type TreeNode2 = Omit<TreeNode, 'children'> & { parents: { id: string }[], children: TreeNode2[], deep: string, refs?: { id: number }[], time: number }
+type TreeNode2 = Omit<TreeNode, 'children'> & { parents: { id: string }[], children: TreeNode2[], deep: string, refs?: { string?: string, uid: string, title?: string }[], time: number }
 type TreeNode3 = Omit<TreeNode2, 'refs' | "chilren"> & { tags: { type: 'page' | 'block', text: string }[], string?: string }
 
 type SideBarItem = {
@@ -42,28 +42,35 @@ const isSidebarItem = (item: ITEM): item is SideBarItem => {
 }
 let oldHref = ''
 const api = {
-  getAllChangesWithin1Day() {
+  getAllChangesWithin2Day() {
     const now = new Date();  // 获取当前时间
     const oneDayAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));  // 获取 24 小时前的时间
     const timestamp = Math.floor(oneDayAgo.getTime());
 
-    return (window.roamAlphaAPI.data.q(
+    console.time('within day')
+    const r = (window.roamAlphaAPI.data.q(
       `
     [
-            :find [(pull ?e [*]) ...]
+            :find [(pull ?e [:edit/time :block/uid :block/string]) ...]
             :in $ ?start_of_day
             :where                
                 [?e :edit/time ?time]
-                [(> ?time ?start_of_day)]
+                [(> ?time ?start_of_day)] 
         ]
     `,
       timestamp
     ) as unknown as TreeNode3[]
-    ).sort((a, b) => {
-      // console.log(a, ' --- aaa')
-      // return b[":edit/time"] - a[":edit/time"]
-      return b.time - a.time
-    }).filter(item => item.string)
+    )
+      // ** filter is much slower  than query by start_of_day
+      // .filter(a => {
+      //   return a.time > timestamp
+      // })
+      .sort((a, b) => {
+        return b.time - a.time
+      }).filter(item => item.string);
+    console.timeEnd('within day')
+
+    return r;
   },
   focusOnBlock(item: TreeNode3) {
     window.roamAlphaAPI.ui.setBlockFocusAndSelection({
@@ -201,12 +208,13 @@ const api = {
         node.children = node.children.map(_sortByOrder).sort(orderSort)
       return node;
     }
+    console.time("CurrentPage")
     const tree = window.roamAlphaAPI.q(`[:find (pull ?b [
       [:block/string :as "text"]
       :block/uid 
       :block/order 
       :block/heading 
-      :block/refs
+      { :block/refs [:block/string :node/title :block/uid] }
       :block/open 
       :block/parents
       [:children/view-type :as "viewType"] 
@@ -215,8 +223,7 @@ const api = {
       :block/props 
       {:block/children ...}
     ]) . :where [?b :block/uid "${uid}"]]`) as unknown as TreeNode3
-
-
+    console.timeEnd("CurrentPage")
     return sortByOrder(tree);
   },
   recordPageAndScrollPosition() {
@@ -377,6 +384,19 @@ function BlockDiv(props: { uid: string, "zoom-path"?: boolean }) {
 }
 
 let lastedCloseTime: number
+
+const isFetchAgainIn5Seconds = () => {
+  if (!lastedCloseTime) {
+    lastedCloseTime = Date.now()
+  } else {
+    if ((Date.now() - lastedCloseTime) < (1000 & 5)) {
+      console.log(' not now')
+      return true;
+    }
+  }
+  return false;
+}
+
 let AppIsOpen = false;
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
@@ -388,8 +408,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   });
   refs.current.query = query
   const getSidebarModeData = () => {
+    console.time("Sidebar")
     const rightSidebarItems = api.getRightSidebarItems()
-    return rightSidebarItems.concat([
+    const result = rightSidebarItems.concat([
       {
         dom: {},
         type: 'custom', title: 'Clear Sidebar', uid: 'clean-sidebar', icon: 'remove',
@@ -400,20 +421,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         }
       },
     ] as SideBarItem[])
-
+    console.timeEnd('Sidebar')
+    return result;
   }
   const initData = async () => {
     api.recordPageAndScrollPosition();
 
     console.log(Date.now() - lastedCloseTime < 10000, ' ---@=')
-    if (!lastedCloseTime) {
-      lastedCloseTime = Date.now()
-    } else {
-      if ((Date.now() - lastedCloseTime) < (1000 & 5)) {
-        console.log(' not now')
-        return;
-      }
+
+    if (isFetchAgainIn5Seconds()) {
+      return;
     }
+
     const pageOrBlockUid = oldHref.split("/").pop()
     if (!oldHref.includes("/page/")) {
       toast.show({
@@ -421,7 +440,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         intent: 'warning',
         icon: 'hand',
       }, 'switch+warning')
+      return;
     }
+    console.time("init")
+    console.time('Source')
 
     const pageUid = (window.roamAlphaAPI.q(`[
         :find ?e .
@@ -430,15 +452,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           [?b :block/page ?p]
           [?p :block/uid ?e]
       ]`) as unknown as string) || pageOrBlockUid;
+
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
     const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid));
+    console.timeEnd('Source')
+
     setSources({
       lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
       tagMode: flatted[2].filter(item => item.text),
       sidebarMode: getSidebarModeData(),
-      changedMode: api.getAllChangesWithin1Day()
+      changedMode: api.getAllChangesWithin2Day()
     });
+
+    console.timeEnd("init")
 
     // 默认
     // setPassProps(defaultFn(""));
@@ -931,10 +958,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const filteredItems = useRef<(TreeNode3 | SideBarItem)[]>([]);
   let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => { };
   // console.log(query, passProps, itemsSource)
+  const isRightSidebarMode = query.startsWith("r:");
   return (
     <div>
       <Omnibar<TreeNode3 | SideBarItem>
-        className="rm-switches"
+        className={`${ID} ${isRightSidebarMode ? `${ID}-sidebar-mode` : ''}`}
         isOpen={isOpen}
         scrollToActiveItem
         activeItem={activeItem}
@@ -1019,7 +1047,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
           }
 
-          console.log("________");
           return <div>
             <div className="flex">
               <Menu >
@@ -1031,7 +1058,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                     return itemListProps.renderItem(itemListProps.filteredItems[index], index)
                   }} />
               </Menu>
-              <Preview uid={activeItem?.uid} key={activeItem?.uid} />
+              {isRightSidebarMode ? null : <Preview uid={activeItem?.uid} key={activeItem?.uid} />}
             </div>
             <Hints />
           </div>
@@ -1105,36 +1132,13 @@ function flatTree(node: TreeNode3) {
     _node.deep = deep;
     blocks.push(_node as unknown as TreeNode3);
     if (_node.refs) {
-      const replacedString = replaceBlockReference(_node.text);
+      const replacedString = replaceBlockReference(_node.text, _node.refs);
       _node.text = replacedString;
-
       taggedBlocks.push({
         ..._node,
         tags: _node.refs.map(ref => {
-          const pageStr = window.roamAlphaAPI.q(`
-        [
-          :find ?t .
-          :in $ ?ref
-          :where
-            [?ref :node/title ?t]
-        ]
-        `, ref.id) as unknown as string;
-          if (pageStr) {
-            return {
-              text: pageStr,
-              type: 'page'
-            }
-          }
-          const refStr =
-            window.roamAlphaAPI.q(`
-        [
-          :find ?t .
-          :in $ ?ref
-          :where
-            [?ref :block/string ?t]
-        ]
-        `, ref.id);
-          return { text: refStr as unknown as string, type: 'block' }
+
+          return { text: (ref.title || ref.string) as unknown as string, type: 'block' }
         })
       })
     }
@@ -1152,8 +1156,8 @@ function flatTree(node: TreeNode3) {
 
 
 
-export function replaceBlockReference(source: string) {
-  const refReg = /(\(\((.{9,})\)\))/gi;
+export function replaceBlockReference(source: string, refs: { string?: string, title?: string, uid: string }[]) {
+  const refReg = /(\()([^\{\}\s\)\(]{9,})?\)/gi;
   let lastIndex = 0;
   let result = "";
   while (true) {
@@ -1168,7 +1172,8 @@ export function replaceBlockReference(source: string) {
     }
     lastIndex = refReg.lastIndex;
     // console.log(match, result, lastIndex, source);
-    result += getRefStringByUid(match[2]);
+    const found = refs.find(r => r.uid === match[2]);
+    result += found?.string || found?.title || match[2];
   }
   // console.log(source, " -- source");
   const rest = source.slice(lastIndex);
