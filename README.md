@@ -3,7 +3,11 @@
 > An easy way to switch between blocks on a page
 
 
-https://user-images.githubusercontent.com/23192045/230536636-6c6ef5b2-6b3a-46ce-9fa0-cb20fae2ee71.mov
+
+
+https://user-images.githubusercontent.com/23192045/236662436-dfdc2045-fb42-4a55-82a5-9deec778df1e.mp4
+
+
 
 
 # Modes
@@ -21,7 +25,7 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 ## Text Mode
 
-![text mode](https://user-images.githubusercontent.com/23192045/222134957-5fe1c182-0480-4398-b6e9-7428caf4481a.gif)
+![search with str](https://user-images.githubusercontent.com/23192045/236662454-11c2ccb4-6285-41bb-b9eb-5f5232ee8275.gif)
 
 - How to start:
   - Default shortcut: cmd+shift+p.
@@ -31,7 +35,8 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 ## Tag Mode
 
-![tag mode](https://user-images.githubusercontent.com/23192045/222135084-ad94bb74-411d-4146-8335-bbd2fabc7192.gif)
+
+![search with tags](https://user-images.githubusercontent.com/23192045/236662466-e5d1f2d4-7189-434b-b13b-79330a2f0082.gif)
 
 
 - How to start:
@@ -41,7 +46,8 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 ## Line Mode
 
-![line mode](https://user-images.githubusercontent.com/23192045/222135121-52e437d8-eb86-42bb-903a-ffb24d7a194a.gif)
+![search with line](https://user-images.githubusercontent.com/23192045/236662488-c7eca005-51cd-4bad-b781-5446b099b09c.gif)
+
 
 
 - How to start:
@@ -51,7 +57,8 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 **The results in all of the top three modes have a quick menu when you hover on a result item that can help you:**
 
-![insert block](https://user-images.githubusercontent.com/23192045/222135663-fef4fb1a-c0cb-4869-a483-42b15fca91c8.gif)
+![search with menu](https://user-images.githubusercontent.com/23192045/236662502-d5ee7506-cb60-4664-b4f1-06c178b35a28.gif)
+
 
 
 - quickly insert a block above or below the hovering block
@@ -68,7 +75,8 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
 
 ## Right Sidebar Mode
 
-![sidebar mode](https://user-images.githubusercontent.com/23192045/222135146-d975887d-d50c-4577-87d9-970f6441e480.gif)
+![search with sidebar](https://user-images.githubusercontent.com/23192045/236662513-0deef455-86c9-4e98-abcf-11981e0ce805.gif)
+
 
 - How to start:
   - Type "r:" to start.
