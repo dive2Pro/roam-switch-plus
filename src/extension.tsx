@@ -409,9 +409,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     isClosing: false
   });
   refs.current.query = query
-  const getSidebarModeData = () => {
+  const getSidebarModeData = async () => {
     console.time("Sidebar")
-    const rightSidebarItems = api.getRightSidebarItems()
+    await delay(20)
+    const rightSidebarItems = await api.getRightSidebarItems()
     const result = rightSidebarItems.concat([
       {
         dom: {},
@@ -463,7 +464,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       lineMode: flatted[1].filter(item => item.text),
       strMode: flatted[1].filter(item => item.text),
       tagMode: flatted[2].filter(item => item.text),
-      sidebarMode: getSidebarModeData(),
+      sidebarMode: [], // getSidebarModeData(),
       changedMode: api.getAllChangesWithin2Day()
     });
 
@@ -490,17 +491,18 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const openSidebar = async () => {
     await api.openRightsidebar();
-    if (!AppIsOpen) {
-      await initData()
-    } else {
-      setSources(prev => {
-        return {
-          ...prev,
-          sidebarMode: getSidebarModeData()
-        }
-      })
-      await delay(20)
-    }
+    // if () {
+    // await initData()
+    // } else {
+    const sidebarMode = await getSidebarModeData()
+    setSources(prev => {
+      return {
+        ...prev,
+        sidebarMode:  sidebarMode
+      }
+    })
+    await delay(20)
+    // }
 
   }
   useEffect(() => {
@@ -900,7 +902,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   // }
   const madeActiveItemChange = async (item: TreeNode3 | SideBarItem, immediately = false) => {
     await delay(10)
-    console.log(item, ' --- delay')
+    // console.log(item, ' --- delay')
     if (isSidebarItem(item)) {
       focusSidebarWindow(item)
       return
@@ -1047,7 +1049,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               behavior: immediately ? 'auto' : 'smooth',
               align: 'center'
             });
-            console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
+            // console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
           }
 
           return <div>
@@ -1147,7 +1149,7 @@ function flatTree(node: TreeNode3) {
       taggedBlocks.push({
         ..._node,
         tags: _node.refs.map(ref => {
-          console.log(ref, ' = ref')
+          // console.log(ref, ' = ref')
           return { text: (ref.title || ref.string) as unknown as string, type: ref.title ? 'page' : 'block' }
         })
       })
