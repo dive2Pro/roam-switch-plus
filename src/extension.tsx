@@ -873,12 +873,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
   const findActiveItem = useEvent(async () => {
     const uid = oldHref.split("/").pop();
-    const activeItem = itemsSource.find(item => item.uid === uid)
-    console.log(uid, ' = uid item', activeItem)
-    if (activeItem) {
-      setActiveItem(activeItem)
-      madeActiveItemChange(activeItem, true)
+    let activeItem = itemsSource.find(item => item.uid === uid)
+    // console.log(uid, ' = uid item', activeItem)
+    if (!activeItem) {
+      activeItem = itemsSource[0]
     }
+    setActiveItem(activeItem)
+    madeActiveItemChange(activeItem, true)
   })
 
   const focusSidebarWindow = async (item: SideBarItem) => {
@@ -975,7 +976,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           inputRef: inputRef,
           placeholder: '',
           onBlur() {
-            console.log(" blur")
+            // console.log(" blur")
           }
         }}
         onClose={(e) => {
@@ -1054,7 +1055,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           }
 
           return <div>
-            <div className="flex">
+            <div className="flex" style={{ maxHeight: 500 }}>
               <Menu>
                 <Virtuoso
                   ref={virtuosoRef}
