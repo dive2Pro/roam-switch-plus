@@ -1090,14 +1090,21 @@ function Hints() {
 function Preview({ uid }: { uid: string }) {
   const ref = useRef<HTMLDivElement>();
   useEffect(() => {
+    let unmounted = false;
     if (uid) {
 
-      window.roamAlphaAPI.ui.components.renderBlock({
+      setTimeout(() => {
+        if(unmounted) {
+          return
+        }
+  window.roamAlphaAPI.ui.components.renderBlock({
         uid,
         el: ref.current
       })
+      }, 250)
+      
       return () => {
-
+        unmounted = true;
       }
     }
 
