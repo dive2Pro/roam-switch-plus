@@ -733,14 +733,15 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `} >
                 {
-                  item.tags?.map(ref => {
+                  item.tags?.filter(ref => {
+                    return ref.text.includes(str)
+                  }).map(ref => {
+                    console.log(ref, ' ---- tags')
                     return <Tag
                       icon={ref.type === 'page' ? <span className="rm-icon-key-prompt">{`[[`}</span> : <span className="rm-icon-key-prompt">{`((`}</span>}
                       className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
                   })}
-                <small className="ellipsis">
-                  {item.text}
-                </small>
+               
                 <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
               </div>
             }
@@ -1144,8 +1145,8 @@ function flatTree(node: TreeNode3) {
       taggedBlocks.push({
         ..._node,
         tags: _node.refs.map(ref => {
-
-          return { text: (ref.title || ref.string) as unknown as string, type: 'block' }
+          console.log(ref, ' = ref')
+          return { text: (ref.title || ref.string) as unknown as string, type: ref.title ? 'page' : 'block' }
         })
       })
     }
