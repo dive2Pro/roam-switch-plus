@@ -483,6 +483,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     if (modeName) {
       query = nextMode + value.substring(modeName.length)
     }
+    setActiveItem(undefined)
     handleQueryChange(query);
     findActiveItem()
     await delay(100)
@@ -1063,7 +1064,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                     return itemListProps.renderItem(itemListProps.filteredItems[index], index)
                   }} />
               </Menu>
-              {isRightSidebarMode ? null : <Preview uid={activeItem?.uid} key={activeItem?.uid} />}
+              {isRightSidebarMode ? null
+                : activeItem?.uid ?
+                  <Preview uid={activeItem?.uid} key={activeItem?.uid} />
+                  : null}
             </div>
             <Hints />
           </div>
