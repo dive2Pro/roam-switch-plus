@@ -101,38 +101,40 @@ const api = {
     if (!parentEl) {
       return []
     }
-    return window.roamAlphaAPI.ui.rightSidebar.getWindows().map((sidebarItemWindow, index) => {
-      let title = '';
-      const icons: Record<'search-query' | 'graph' | 'block' | 'outline' | 'mentions', string> = {
-        'search-query': 'panel-stats',
-        graph: 'graph',
-        "block": "symbol-circle",
-        "mentions": "properties",
-        "outline": 'application',
-      };
-      const dom = parentEl.children[index] as HTMLDivElement;
-      // @ts-ignore
-      if (sidebarItemWindow.type === 'search-query' || sidebarItemWindow.type === 'graph'
-        || sidebarItemWindow.type === 'mentions'
-      ) {
+    return window.roamAlphaAPI.ui.rightSidebar.getWindows()
+      .sort((a, b) => a.order - b.order)
+      .map((sidebarItemWindow, index) => {
+        let title = '';
+        const icons: Record<'search-query' | 'graph' | 'block' | 'outline' | 'mentions', string> = {
+          'search-query': 'panel-stats',
+          graph: 'graph',
+          "block": "symbol-circle",
+          "mentions": "properties",
+          "outline": 'application',
+        };
+        const dom = parentEl.children[index] as HTMLDivElement;
         // @ts-ignore
-        title = dom.querySelector(".rm-sidebar-window").firstElementChild.children[1].innerText
-      } else {
-        if (sidebarItemWindow.type === 'block') {
-          title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["block-uid"]}"] [?b :block/string ?e]]`) as unknown as string
-
+        if (sidebarItemWindow.type === 'search-query' || sidebarItemWindow.type === 'graph'
+          || sidebarItemWindow.type === 'mentions'
+        ) {
+          // @ts-ignore
+          title = dom.querySelector(".rm-sidebar-window").firstElementChild.children[1].innerText
         } else {
-          title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["page-uid"]}"] [?b :node/title ?e]]`) as unknown as string
+          if (sidebarItemWindow.type === 'block') {
+            title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["block-uid"]}"] [?b :block/string ?e]]`) as unknown as string
+
+          } else {
+            title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["page-uid"]}"] [?b :node/title ?e]]`) as unknown as string
+          }
         }
-      }
-      return {
-        ...sidebarItemWindow,
-        uid: sidebarItemWindow["window-id"],
-        dom,
-        title,
-        icon: icons[sidebarItemWindow.type]
-      } as SideBarItem
-    });
+        return {
+          ...sidebarItemWindow,
+          uid: sidebarItemWindow["window-id"],
+          dom,
+          title,
+          icon: icons[sidebarItemWindow.type]
+        } as SideBarItem
+      });
   },
   async insertBlockByUid(uid: string, order: number) {
     const newUid = window.roamAlphaAPI.util.generateUID();
@@ -613,7 +615,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       },
       remove: () => {
         api.removeSidebarWindow(item as SideBarItem)
-        console.log(item, ' removing ')
         setSources(prev => {
           return {
             ...prev,
@@ -741,7 +742,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                       icon={ref.type === 'page' ? <span className="rm-icon-key-prompt">{`[[`}</span> : <span className="rm-icon-key-prompt">{`((`}</span>}
                       className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
                   })}
-               
+
                 <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
               </div>
             }
@@ -1021,6 +1022,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           // right side bar mode
           if ('dom' in _activeItem) {
             setActiveItem(_activeItem)
+            scrollToActiveItem(_activeItem, true)
             focusSidebarWindow(_activeItem)
             return;
           }
@@ -1050,7 +1052,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
           return <div>
             <div className="flex">
-              <Menu >
+              <Menu>
                 <Virtuoso
                   ref={virtuosoRef}
                   style={{ height: '500px' }}
@@ -1095,15 +1097,15 @@ function Preview({ uid }: { uid: string }) {
     if (uid) {
 
       setTimeout(() => {
-        if(unmounted) {
+        if (unmounted) {
           return
         }
-  window.roamAlphaAPI.ui.components.renderBlock({
-        uid,
-        el: ref.current
-      })
+        window.roamAlphaAPI.ui.components.renderBlock({
+          uid,
+          el: ref.current
+        })
       }, 250)
-      
+
       return () => {
         unmounted = true;
       }

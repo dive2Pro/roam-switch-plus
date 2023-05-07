@@ -1,7 +1,5 @@
 .rm-switches {
-    &-sidebar-mode {
-        width: 500px;
-    }
+
     .shadowTop() {
         box-shadow+: 0px -1px 0px 0px #d2cdcd;
     }
@@ -13,11 +11,19 @@
     @media (min-width: 768px) {
         width: 80vw;
         left: 10%;
+
+        &-sidebar-mode {
+            width: calc(80vw - 200px);
+        }
     }
 
     @media (min-width: 1024px) {
         width: 768px;
         left: calc(50% - 384px);
+
+        &-sidebar-mode {
+            width: 568px;
+        }
     }
 
     top: 20vh;
@@ -49,6 +55,7 @@
 
         &.tag-mode {
             flex-wrap: wrap;
+
             .ellipsis {
                 -webkit-line-clamp: 1;
             }
@@ -56,6 +63,7 @@
             .rm-page-ref--tag {
                 margin-right: 5px;
                 max-width: 120px;
+
                 .bp3-dark & {
                     color: #182026;
                 }
@@ -131,7 +139,7 @@
         .rm-page-ref--tag {
             color: #A7B6C2;
         }
-    
+
     }
 
     .bp3-menu {
