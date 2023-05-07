@@ -472,7 +472,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
 
   const resetInputWithMode = async (nextMode: string) => {
-    const value = inputRef.current.value;
+    const value = (inputRef.current?.value) || "";
     const modeName = Object.keys(modes).find(mode => {
       return value.startsWith(mode)
     })
