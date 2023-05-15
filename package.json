@@ -1,6 +1,6 @@
 {
-  "name": "roam-plugin-template",
-  "version": "0.0.0",
+  "name": "roam-switch-plus",
+  "version": "0.1.0",
   "main": "extension.js",
   "scripts": {
     "dev": "concurrently \"tsc --watch\" \"NODE_ENV=dev vite build --watch\"",
@@ -42,7 +42,7 @@
     "vite-plugin-remove-console": "^1.3.0"
   },
   "roam": {
-    "id": "hyc-roam-template",
+    "id": "hyc-roam-switch-plus",
     "icon": "./favicon.png"
   }
 }
