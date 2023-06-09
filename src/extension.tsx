@@ -992,9 +992,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           onKeyDownCapture(e) {
             console.log(e.key, e.shiftKey,)
             if (e.key === 'Tab') {
-              // zoom in
               if (e.shiftKey) {
-                // zoom out
+                zoomStacks.zoomOut()
+              } else {
+                zoomStacks.zoomIn(activeItem.uid)
               }
               e.preventDefault();
               e.stopPropagation()
@@ -1313,14 +1314,12 @@ function useZoomStacks() {
       })
     },
     zoomOut() {
-      if (stacks.length === 1) {
+      if (stacks.length <= 1) {
         return
       }
+      console.log('zoom out: ', stacks)
 
-      setStacks(prev => {
-        prev.pop();
-        return [...prev]
-      })
+      setStacks( stacks.slice(0, stacks.length - 1))
     },
     changeSidebarMode(data: SideBarItem[]) {
       setSidebarMode(data)
