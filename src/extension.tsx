@@ -741,14 +741,16 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                                ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
                                `} >
                 {
-                  item.tags?.filter(ref => {
-                    return ref.text.includes(str)
-                  }).map(ref => {
-                    console.log(ref, ' ---- tags')
-                    return <Tag
-                      icon={ref.type === 'page' ? <span className="rm-icon-key-prompt">{`[[`}</span> : <span className="rm-icon-key-prompt">{`((`}</span>}
-                      className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
-                  })}
+                  item.tags
+                    // ?.filter(ref => {
+                    //   return ref.text.includes(str)
+                    // })
+                    ?.map(ref => {
+                      console.log(ref, ' ---- tags')
+                      return <Tag
+                        icon={ref.type === 'page' ? <span className="rm-icon-key-prompt">{`[[`}</span> : <span className="rm-icon-key-prompt">{`((`}</span>}
+                        className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
+                    })}
 
                 <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
               </div>
@@ -974,7 +976,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const filteredItems = useRef<(TreeNode3 | SideBarItem)[]>([]);
   let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => { };
-  // console.log(query, passProps, itemsSource)
+  console.log(query, passProps, itemsSource)
   const isRightSidebarMode = query.startsWith("r:");
   return (
     <div>
@@ -1319,7 +1321,7 @@ function useZoomStacks() {
       }
       console.log('zoom out: ', stacks)
 
-      setStacks( stacks.slice(0, stacks.length - 1))
+      setStacks(stacks.slice(0, stacks.length - 1))
     },
     changeSidebarMode(data: SideBarItem[]) {
       setSidebarMode(data)
