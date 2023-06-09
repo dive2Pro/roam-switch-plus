@@ -437,14 +437,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     }
 
     const pageOrBlockUid = oldHref.split("/").pop()
-    if (!oldHref.includes("/page/")) {
-      toast.show({
-        message: 'Switch+ only works in a specific page',
-        intent: 'warning',
-        icon: 'hand',
-      }, 'switch+warning')
-      return;
-    }
     console.time("init")
     console.time('Source')
 
@@ -499,7 +491,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setSources(prev => {
       return {
         ...prev,
-        sidebarMode:  sidebarMode
+        sidebarMode: sidebarMode
       }
     })
     await delay(20)
@@ -515,6 +507,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+',
       "default-hotkey": ['super-shift-p'],
       async callback() {
+        if (inPageCheck()) {
+          return
+        }
         if (!AppIsOpen) {
           await initData()
         }
@@ -526,6 +521,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Tag Mode',
       // "default-hotkey": ['super-shift-o'],
       async callback() {
+        if (inPageCheck()) {
+          return
+        }
         if (!AppIsOpen) {
           await initData()
         }
@@ -538,6 +536,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Line Mode',
       // "default-hotkey": ['super-shift-l'],
       async callback() {
+        if (inPageCheck()) {
+          return
+        }
         if (!AppIsOpen) {
           await initData()
         }
@@ -549,6 +550,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Sidebar Mode',
       // "default-hotkey": ['super-shift-u'],
       async callback() {
+        if (inPageCheck()) {
+          return
+        }
         await openSidebar();
         open();
         resetInputWithMode("r:")
@@ -558,6 +562,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       label: 'Open Switch+ in Latest Edit Mode',
       // "default-hotkey": ['super-shift-e'],
       async callback() {
+        if (inPageCheck()) {
+          return
+        }
         if (!AppIsOpen) {
           await initData()
         }
@@ -1208,4 +1215,15 @@ function getRefStringByUid(uid: string) {
   return block ? block[":block/string"] : "";
 }
 
+
+function inPageCheck() {
+  if (!window.location.href.includes("/page/")) {
+    toast.show({
+      message: 'Switch+ only works in a specific page',
+      intent: 'warning',
+      icon: 'hand',
+    }, 'switch+warning')
+    return true
+  }
+}
 
