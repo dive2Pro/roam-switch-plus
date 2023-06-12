@@ -1,6 +1,18 @@
 import React, { FC, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from 'react-dom';
-import { Button, ButtonGroup, Icon, IconName, InputGroup, Menu, MenuItem, Tag, Toaster, Tooltip } from "@blueprintjs/core";
+import {
+  Button,
+  ButtonGroup,
+  IconName,
+  Menu,
+  MenuItem,
+  Tag,
+  Toaster,
+  Tooltip,
+  OverflowList,
+  Breadcrumbs,
+  Icon
+} from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
@@ -9,6 +21,7 @@ import { PullBlock, TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
 import { formatDate, simulateClick } from "./helper";
 import { ForbidEditRoamBlock } from "./forbird-edit-roam-block";
+import { getParentsStrFromBlockUid } from "./roam";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -259,6 +272,7 @@ const api = {
     // })
 
   },
+
 }
 
 function escapeRegExpChars(text: string) {
@@ -443,7 +457,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     console.time('Source');
 
     const pageUid = getPageUid();
-    await zoomStacks.open(pageUid)
+    api
+    await zoomStacks.open(pageUid, getStringByUid(pageUid))
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
     // const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid));
     // console.timeEnd('Source')
@@ -875,6 +890,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     madeActiveItemChange(item)
   }
 
+  console.log(sources, ' ---@')
   const itemsSource = passProps.items(sources)
 
   const findActiveItem = useEvent(async () => {
@@ -992,7 +1008,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             // console.log(" blur")
           },
           onKeyDownCapture(e) {
-            console.log(e.key, e.shiftKey,)
+            // 侧边栏模式不进去.
+            if (activeItem && 'dom' in activeItem) {
+              return;
+            }
+            console.log(e.key, e.shiftKey, activeItem, '_______')
             if (e.key === 'Tab') {
               if (e.shiftKey) {
                 zoomStacks.zoomOut()
@@ -1080,6 +1100,31 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           }
 
           return <div>
+            {
+              zoomStacks.stacks.length <= 1 ? null :
+                <div>
+                  <div className="rm-zoom zoom-path-view">
+                    {zoomStacks.stacks.map((stack, index, arr) => {
+                      return <div className="rm-zoom-item" style={{ position: 'relative' }} onClick={() => {
+                        zoomStacks.zoomTo(stack.uid)
+                      }}>
+                        <span className="rm-zoom-item-content">
+                          {stack.text}
+                        </span>
+                        {index !== arr.length - 1 ? <Icon icon="chevron-right" /> : null}
+                        {index === arr.length - 1 ? <div style={{
+                          position: 'absolute', display: 'flex', inset: 0
+                        }}
+
+                        >
+                          <div className="rm-zoom-mask" />
+                        </div> : null}
+
+                      </div>
+                    })}
+                  </div>
+                </div>
+            }
             <div className="flex" style={{ maxHeight: 500 }}>
               <Menu>
                 <Virtuoso
@@ -1107,7 +1152,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 }
 function getPageUid() {
   const pageOrBlockUid = oldHref.split("/").pop();
-
 
   const pageUid = (window.roamAlphaAPI.q(`[
         :find ?e .
@@ -1247,6 +1291,18 @@ function getRefStringByUid(uid: string) {
   return block ? block[":block/string"] : "";
 }
 
+function getPageTitleByUid(uid: string) {
+  const block = window.roamAlphaAPI.pull("[:node/title]", [
+    ":block/uid",
+    uid,
+  ]);
+  return block ? block[":node/title"] : "";
+}
+
+function getStringByUid(uid: string) {
+  return getPageTitleByUid(uid) || getRefStringByUid(uid)
+}
+
 
 function inPageCheck() {
   if (!window.location.href.includes("/page/")) {
@@ -1268,71 +1324,88 @@ type ZoomSources = {
 }
 
 
-type ZoomState = { uid: string, query: string, sources: ZoomSources }
+type ZoomState = { uid: string, query: string, sources: ZoomSources, text: string }
+
+const sourceMap = new Map<string, ZoomSources>();
 
 function useZoomStacks() {
+
   const [stacks, setStacks] = useState<ZoomState[]>([])
   const [sidebarMode, setSidebarMode] = useState<SideBarItem[]>([])
+  const [parents, setParents] = useState<{ uid: string, text: string, query?: '' }[]>([])
+
+  const getSourceByUid = (uid: string) => {
+
+    const flatted = flatTree(api.getCurrentPageFullTreeByUid(uid));
+    return {
+      lineMode: flatted[1].filter(item => item.text),
+      strMode: flatted[1].filter(item => item.text),
+      tagMode: flatted[2].filter(item => item.text),
+      sidebarMode: [] as SideBarItem[], // getSidebarModeData(),
+      changedMode: api.getAllChangesWithin2Day()
+    }
+  }
+
   const result = {
     clean() {
-      setStacks(stacks.slice(0, 1))
+      // setStacks(stacks.slice(0, 1))
     },
-    async open(uid: string) {
-      return result.zoomIn(uid)
+    async open(uid: string, text: string) {
+      sourceMap.clear();
+      return result.zoomIn(uid, text)
     },
-    async zoomIn(uid: string) {
-
-      const flatted = flatTree(api.getCurrentPageFullTreeByUid(uid));
-      // console.timeEnd('Source')
-      const index = stacks.findIndex(stack => stack.uid === uid)
-      if (index > -1) {
-        setStacks(([...stacks.slice(0, index), {
-          uid, query: '', sources:
-            ({
-              lineMode: flatted[1].filter(item => item.text),
-              strMode: flatted[1].filter(item => item.text),
-              tagMode: flatted[2].filter(item => item.text),
-              sidebarMode: [], // getSidebarModeData(),
-              changedMode: api.getAllChangesWithin2Day()
-            })
-        }]))
-        return
-      }
-      setStacks(([...stacks, {
-        uid, query: '', sources:
-          ({
-            lineMode: flatted[1].filter(item => item.text),
-            strMode: flatted[1].filter(item => item.text),
-            tagMode: flatted[2].filter(item => item.text),
-            sidebarMode: [], // getSidebarModeData(),
-            changedMode: api.getAllChangesWithin2Day()
-          })
-      }]))
+    async zoomIn(uid: string, text?: string) {
+      const parents = getParentsStrFromBlockUid(uid);
+      const source = getSourceByUid(uid);
+      sourceMap.set(uid, source);
+      console.log(parents, ' = parents ', uid, source)
+      setParents(parents);
     },
     changeQuery(query: string) {
-      setStacks(prev => {
+      setParents(prev => {
         prev[prev.length - 1].query = query;
         return [...prev]
       })
     },
     zoomOut() {
-      if (stacks.length <= 1) {
+      if (parents.length <= 1) {
         return
       }
       console.log('zoom out: ', stacks)
-
-      setStacks(stacks.slice(0, stacks.length - 1))
+      // const newParents = parents.slice(0, stacks.length - 1)
+      parents.pop();
+      result.zoomIn(parents[parents.length - 1].uid)
     },
     changeSidebarMode(data: SideBarItem[]) {
       setSidebarMode(data)
     },
     currentStack() {
-      const cur = stacks[stacks.length - 1]
-      if (cur)
-        cur.sources.sidebarMode = sidebarMode;
-      return cur || {
-        query: ''
-      } as ZoomState
+      const cur = parents[parents.length - 1]
+      if (!sourceMap.has(cur?.uid)) {
+        return {
+          query: '',
+          sources: {
+            lineMode: [],
+            strMode: [],
+            tagMode: [],
+            sidebarMode: [] as SideBarItem[], // getSidebarModeData(),
+            changedMode: []
+          } as ZoomSources
+        }
+      }
+      return {
+        query: "",
+        sources: {
+          ...sourceMap.get(cur.uid),
+          sidebarMode: sidebarMode
+        }
+      }
+    },
+    get stacks() {
+      return parents
+    },
+    zoomTo(uid: string) {
+      result.zoomIn(uid)
     }
   }
 
