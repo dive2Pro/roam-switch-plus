@@ -19,7 +19,7 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import "./style.less";
 import { PullBlock, TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
-import { formatDate, simulateClick } from "./helper";
+import { extension_helper, formatDate, simulateClick } from "./helper";
 import { ForbidEditRoamBlock } from "./forbird-edit-roam-block";
 import { getParentsStrFromBlockUid } from "./roam";
 
@@ -1022,7 +1022,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               e.preventDefault();
               e.stopPropagation()
             }
-          }
+          },
+
         }}
         onClose={(e) => {
           // console.log(e, e.type, ' ----@type')
@@ -1101,7 +1102,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
           return <div>
             {
-              zoomStacks.stacks.length <= 1 ? null :
+              zoomStacks.stacks.length <= -1 ? null :
                 <div>
                   <div className="rm-zoom zoom-path-view">
                     {zoomStacks.stacks.map((stack, index, arr) => {
@@ -1133,14 +1134,15 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                   totalCount={itemListProps.filteredItems.length}
                   itemContent={index => {
                     return itemListProps.renderItem(itemListProps.filteredItems[index], index)
-                  }} />
+                  }}
+                />
               </Menu>
               {isRightSidebarMode ? null
                 : activeItem?.uid ?
                   <Preview uid={activeItem?.uid} key={activeItem?.uid} />
                   : null}
             </div>
-            <Hints />
+            <Hints total={itemListProps.items.length} filtered={itemListProps.filteredItems.length} />
           </div>
         }}
         overlayProps={{
@@ -1163,8 +1165,12 @@ function getPageUid() {
   return pageUid;
 }
 
-function Hints() {
+function Hints(props: { total: number, filtered: number}) {
   return <div className={`${ID}-hints`}>
+    <span>
+      { props.filtered}/{ props.total} total
+    </span>
+
     <span>
       <span className="hint-icon">@</span><span> refs mode </span>
     </span>
@@ -1218,6 +1224,9 @@ export function initExtension(extensionAPI: RoamExtensionAPI) {
   el.id = ID;
   roamEl.appendChild(el);
   ReactDOM.render(<App extensionAPI={extensionAPI} />, el);
+  extension_helper.on_uninstall(() => {
+    roamEl.removeChild(el);
+  })
 }
 
 
@@ -1332,7 +1341,7 @@ function useZoomStacks() {
 
   const [stacks, setStacks] = useState<ZoomState[]>([])
   const [sidebarMode, setSidebarMode] = useState<SideBarItem[]>([])
-  const [parents, setParents] = useState<{ uid: string, text: string, query?: '' }[]>([])
+  const [parents, setParents] = useState<{ uid: string, text: string, query?: string }[]>([])
 
   const getSourceByUid = (uid: string) => {
 
