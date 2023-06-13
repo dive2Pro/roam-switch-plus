@@ -426,6 +426,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     isClosing: false
   });
   refs.current.query = query
+  console.log(query, ' = query')
 
   const getSidebarModeData = async () => {
     console.time("Sidebar")
@@ -1165,10 +1166,10 @@ function getPageUid() {
   return pageUid;
 }
 
-function Hints(props: { total: number, filtered: number}) {
+function Hints(props: { total: number, filtered: number }) {
   return <div className={`${ID}-hints`}>
     <span>
-      { props.filtered}/{ props.total} total
+      {props.filtered}/{props.total} total
     </span>
 
     <span>
@@ -1367,8 +1368,14 @@ function useZoomStacks() {
       const parents = getParentsStrFromBlockUid(uid);
       const source = getSourceByUid(uid);
       sourceMap.set(uid, source);
-      console.log(parents, ' = parents ', uid, source)
-      setParents(parents);
+      setParents(prevParents => {
+        return parents.map(parent => {
+          return {
+            ...parent,
+            query: prevParents.find(pItem => pItem.uid === parent.uid)?.query || ''
+          }
+        })
+      });
     },
     changeQuery(query: string) {
       setParents(prev => {
@@ -1390,6 +1397,7 @@ function useZoomStacks() {
     },
     currentStack() {
       const cur = parents[parents.length - 1]
+      
       if (!sourceMap.has(cur?.uid)) {
         return {
           query: '',
@@ -1402,8 +1410,10 @@ function useZoomStacks() {
           } as ZoomSources
         }
       }
+
+      console.log(cur, ' = cur')
       return {
-        query: "",
+        query: cur.query || '',
         sources: {
           ...sourceMap.get(cur.uid),
           sidebarMode: sidebarMode
