@@ -513,10 +513,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
   }
   useEffect(() => {
-    props.extensionAPI.settings.panel.create({
-      tabTitle: 'Switch+',
-
-    })
     props.extensionAPI.ui.commandPalette.addCommand({
       label: 'Open Switch+',
       "default-hotkey": ['super-shift-p'],
@@ -1229,7 +1225,7 @@ export function initExtension(extensionAPI: RoamExtensionAPI) {
   extension_helper.on_uninstall(() => {
     roamEl.removeChild(el);
   })
-  initSwitchBetweenSidebarAndMain()
+  initSwitchBetweenSidebarAndMain(extensionAPI)
 }
 
 function flatTree(node: TreeNode3) {

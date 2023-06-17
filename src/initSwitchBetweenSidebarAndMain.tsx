@@ -1,13 +1,70 @@
 import { Button } from "@blueprintjs/core";
 import ReactDOM from "react-dom";
-import { SidebarWindow, SidebarWindowInput } from "roamjs-components/types";
+import { SidebarWindow } from "roamjs-components/types";
 import { extension_helper } from "./helper";
 
 const rightSidebar = window.roamAlphaAPI.ui.rightSidebar
 type SideWindowInfo = SidebarWindow & {
     dom: HTMLElement;
 }
-export function initSwitchBetweenSidebarAndMain() {
+
+let unMountsArr: (() => void)[] = [];
+const unMounts = {
+    add(fn: () => void) {
+        unMountsArr.push(fn)
+    },
+    clean() {
+        unMountsArr.forEach(fn => fn());
+        document.querySelectorAll(".sidebar-switch").forEach(el => {
+            el.remove()
+        })
+
+        unMountsArr = [];
+    },
+    init() {
+        unMountsArr = [];
+    }
+}
+
+export function initSwitchBetweenSidebarAndMain(extensionAPI: RoamExtensionAPI) {
+    const id = "sidebar-switch";
+    extensionAPI.settings.panel.create({
+        tabTitle: 'Switch+',
+        settings: [
+            {
+                id,
+                name: "Switch between sidebar view and main view",
+                description: `eeee`,
+                action: {
+                    type: "switch",
+                    onChange: (evt: any) => {
+                        console.log('evt: ', evt.target.value, evt.target.check, evt, unMountsArr)
+                        if (evt.target.checked) {
+                            init()
+                        } else {
+                            unMounts.clean();
+                        }
+                    }
+                }
+            },
+
+        ]
+    });
+
+    if (extensionAPI.settings.get(id) == null) {
+        extensionAPI.settings.set(id, true)
+    }
+    setTimeout(() => {
+        console.log(extensionAPI.settings.get(id), ' ----')
+        if (extensionAPI.settings.get(id)) {
+            init()
+        } 
+    })
+    
+
+}
+
+function init() {
 
     const isSidebarOpen = () => !!document.querySelector("#roam-right-sidebar-content");
 
@@ -39,9 +96,6 @@ export function initSwitchBetweenSidebarAndMain() {
             ReactDOM.render(<SwitchButton onClick={() => {
                 doSwitch(w)
             }} />, el)
-            extension_helper.on_uninstall(() => {
-                controls.removeChild(el)
-            })
         })
     }
 
@@ -49,6 +103,7 @@ export function initSwitchBetweenSidebarAndMain() {
         if (!isSidebarOpen()) {
             return
         }
+        unMounts.init()
         addSwitchIcons(getSideWindows())
     }
 
@@ -72,7 +127,8 @@ export function initSwitchBetweenSidebarAndMain() {
     });
 
     observer.observe(div, { childList: true, subtree: true });
-    extension_helper.on_uninstall(() => observer.disconnect())
+    unMounts.add(() => observer.disconnect())
+    extension_helper.on_uninstall(() => unMounts.clean())
     main();
 }
 
