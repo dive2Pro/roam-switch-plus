@@ -22,6 +22,7 @@ import { useEvent } from "./hooks";
 import { extension_helper, formatDate, simulateClick } from "./helper";
 import { ForbidEditRoamBlock } from "./forbird-edit-roam-block";
 import { getParentsStrFromBlockUid } from "./roam";
+import { initSwitchBetweenSidebarAndMain } from "./initSwitchBetweenSidebarAndMain";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -1228,8 +1229,8 @@ export function initExtension(extensionAPI: RoamExtensionAPI) {
   extension_helper.on_uninstall(() => {
     roamEl.removeChild(el);
   })
+  initSwitchBetweenSidebarAndMain()
 }
-
 
 function flatTree(node: TreeNode3) {
   console.log(node, ' = node')
