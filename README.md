@@ -84,3 +84,23 @@ You can easily switch to another mode by using keyboard shortcuts or changing th
   - All open windows in the right sidebar.
   - Option to clear the windows.
 
+
+# Zoom in & Zoom out
+
+![search zoomin](https://github.com/dive2Pro/roam-switch-plus/assets/23192045/112b2c7e-4372-473b-8051-adde0cf3fc13)
+
+
+- Zoom in : Tab
+- Zoom out : Shift+Tab
+
+Now you can zoom in or zoom out a specific block for searching, and all modes are available as well.
+
+# Switching between the sidebar view and main view
+
+![search sidebar](https://github.com/dive2Pro/roam-switch-plus/assets/23192045/e673afc4-c912-4ae7-a1cf-192d0a3c7db1)
+
+You can disable this functionality in the settings panel.
+
+
+
+
