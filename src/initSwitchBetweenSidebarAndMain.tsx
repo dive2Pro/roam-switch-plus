@@ -1,6 +1,6 @@
-import { Button } from "@blueprintjs/core";
+import { Button, Toaster } from "@blueprintjs/core";
 import ReactDOM from "react-dom";
-import { SidebarWindow } from "roamjs-components/types";
+import { SidebarWindow, SidebarWindowInput } from "roamjs-components/types";
 import { extension_helper } from "./helper";
 
 const rightSidebar = window.roamAlphaAPI.ui.rightSidebar
@@ -28,6 +28,7 @@ const unMounts = {
 
 export function initSwitchBetweenSidebarAndMain(extensionAPI: RoamExtensionAPI) {
     const id = "sidebar-switch";
+    createSwitchLastCommand(extensionAPI);
     extensionAPI.settings.panel.create({
         tabTitle: 'Switch+',
         settings: [
@@ -58,10 +59,8 @@ export function initSwitchBetweenSidebarAndMain(extensionAPI: RoamExtensionAPI) 
         console.log(extensionAPI.settings.get(id), ' ----')
         if (extensionAPI.settings.get(id)) {
             init()
-        } 
+        }
     })
-    
-
 }
 
 function init() {
@@ -140,7 +139,23 @@ const getBlockId = (w: any) => {
     return w["block-uid"] || w['page-uid']
 }
 
-async function doSwitch(w: SideWindowInfo) {
+
+let lastSwitchSidebar: SidebarWindowInput & { order: number }
+
+function createSwitchLastCommand(extensionAPI: RoamExtensionAPI) {
+    extensionAPI.ui.commandPalette.addCommand({
+        label: "Switch main view back to sidebar",
+        callback: () => {
+            if (!lastSwitchSidebar) {
+                Toaster.create({}).show({ message: 'No switching history', intent: 'warning' })
+                return
+            }
+            doSwitch(lastSwitchSidebar)
+        }
+    })
+}
+
+async function doSwitch(w: Pick<SideWindowInfo, "type" | "order">) {
     const uid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid()
     console.log(w, ' ==== www', uid)
     rightSidebar.removeWindow({
@@ -150,18 +165,25 @@ async function doSwitch(w: SideWindowInfo) {
         }
     })
 
+
     window.roamAlphaAPI.ui.mainWindow.openBlock({
         block: {
             uid: getBlockId(w)
         }
     })
-    if (uid)
+    if (uid) {
+
+        const newWindow = {
+            type: 'outline' as const,
+            "block-uid": uid,
+            order: w.order
+        }
+
+        lastSwitchSidebar = newWindow
+
         rightSidebar.addWindow({
-            window: {
-                type: 'outline',
-                "block-uid": uid,
-                // @ts-ignore
-                order: w.order
-            }
+            window: newWindow
         })
+    }
+
 }
