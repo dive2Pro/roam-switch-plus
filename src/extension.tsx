@@ -17,12 +17,12 @@ import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 
 import "./style.less";
-import { PullBlock, TreeNode } from "roamjs-components/types";
+import { PullBlock, SidebarWindowInput, TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
 import { extension_helper, formatDate, simulateClick } from "./helper";
 import { ForbidEditRoamBlock } from "./forbird-edit-roam-block";
 import { getParentsStrFromBlockUid } from "./roam";
-import { initSwitchBetweenSidebarAndMain } from "./initSwitchBetweenSidebarAndMain";
+import { doSwitch, initSwitchBetweenSidebarAndMain } from "./initSwitchBetweenSidebarAndMain";
 
 
 const delay = (ms?: number) => new Promise(resolve => {
@@ -39,7 +39,7 @@ type SideBarItem = {
   dom: Element;
   title: string;
   uid: string;
-  icon?: IconName,
+  icon?: IconName;
 } & (
     { type: 'custom', onClick: () => void }
     | { type: "search-query" }
@@ -323,7 +323,7 @@ type PassProps = {
 }
 
 
-type RightMenuType = "top" | 'right' | 'bottom' | 'switch' | 'remove';
+type RightMenuType = "top" | 'right' | 'bottom' | 'switch' | 'remove' | 'switch-swap';
 type OnRightMenuClick2 = (item: SideBarItem | TreeNode3, type: RightMenuType, e: React.MouseEvent<HTMLElement>) => void;
 
 type OnRightMenuClick = (type: RightMenuType, e: React.MouseEvent<HTMLElement>) => void;
@@ -362,6 +362,12 @@ const SidebarRightMenu: FC<{
 }> = (props) => {
   return <div className="right-menu">
     <ButtonGroup>
+      <Tooltip
+        content={
+          <span>Switching in sidebar</span>
+        }>
+        <Button icon="swap-horizontal" onClick={e => props.onClick('switch-swap', e)} />
+      </Tooltip>
       <Tooltip
         content={
           <span>Toggle in sidebar</span>
@@ -497,20 +503,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   }
   const openSidebar = async () => {
     await api.openRightsidebar();
-    // if () {
-    // await initData()
-    // } else {
     const sidebarMode = await getSidebarModeData()
-    // setSources(prev => {
-    //   return {
-    //     ...prev,
-    //     sidebarMode: sidebarMode
-    //   }
-    // })
     zoomStacks.changeSidebarMode(sidebarMode)
     await delay(20)
-    // }
-
   }
   useEffect(() => {
     props.extensionAPI.ui.commandPalette.addCommand({
@@ -602,6 +597,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     onItemSelect: () => { },
   });
 
+  const sidebarSwitch = async (item: SideBarItem) => {
+    doSwitch(item as any)
+    await openSidebar()
+    inputRef.current?.focus()
+  }
 
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
     e.preventDefault();
@@ -627,6 +627,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       switch: () => {
         api.toggleSidebarWindow(item as SideBarItem)
       },
+      'switch-swap': () => {
+        sidebarSwitch(item as SideBarItem)
+      },
+
       remove: () => {
         api.removeSidebarWindow(item as SideBarItem);
         zoomStacks.changeSidebarMode(
@@ -796,7 +800,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           let content = <>
             <Button icon={item.icon}
               active={false}
-              fill minimal alignText="left" text={item.title}
+              fill
+              minimal
+              alignText="left"
+              text={<span style={{ color: itemProps.modifiers.active ? 'white' : 'inherit' }}>
+                {item.title}
+              </span>}
               rightIcon={
                 <SidebarRightMenu onClick={(type, e) => { onRightMenuClick(item, type, e) }} />
               }
@@ -1008,6 +1017,10 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           onKeyDownCapture(e) {
             // 侧边栏模式不进去.
             if (activeItem && 'dom' in activeItem) {
+
+              if (e.key === 'Tab') {
+                sidebarSwitch(activeItem)
+              }
               return;
             }
             console.log(e.key, e.shiftKey, activeItem, '_______')
@@ -1394,7 +1407,7 @@ function useZoomStacks() {
     },
     currentStack() {
       const cur = parents[parents.length - 1]
-      
+
       if (!sourceMap.has(cur?.uid)) {
         return {
           query: '',

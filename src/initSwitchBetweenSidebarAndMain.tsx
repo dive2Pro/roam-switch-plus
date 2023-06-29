@@ -155,7 +155,7 @@ function createSwitchLastCommand(extensionAPI: RoamExtensionAPI) {
     })
 }
 
-async function doSwitch(w: Pick<SideWindowInfo, "type" | "order">) {
+export async function doSwitch(w: Pick<SideWindowInfo, "type" | "order">) {
     const uid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid()
     console.log(w, ' ==== www', uid)
     rightSidebar.removeWindow({
