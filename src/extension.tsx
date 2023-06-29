@@ -601,6 +601,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     doSwitch(item as any)
     await openSidebar()
     inputRef.current?.focus()
+    api.recordPageAndScrollPosition();
   }
 
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
