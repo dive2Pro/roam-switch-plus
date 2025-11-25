@@ -533,7 +533,6 @@ const ModeSelector: FC<{
         icon={currentModeOption.icon}
         minimal
         small
-        text={mode === "" ? currentModeOption.label : undefined}
         rightIcon="caret-down"
         onClick={() => setModeSelectorOpen(!modeSelectorOpen)}
       />
@@ -1269,8 +1268,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       ) {
         e.preventDefault();
         e.stopPropagation();
-        setModeSelectorOpen(false);
-        inputRef.current?.focus();
+
+        setTimeout(() => {
+          setModeSelectorOpen(false);
+          inputRef.current?.focus();
+        }, 100);
         return;
       }
     };
@@ -1304,6 +1306,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             // console.log(" blur")
           },
           onKeyDownCapture(e) {
+            // 如果模式选择器打开，拦截 Enter 键，防止触发列表选择
+            if (
+              modeSelectorOpen &&
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.ctrlKey &&
+              !e.metaKey &&
+              !e.altKey
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+
             // 检测 "/" 键，打开模式选择器
             if (
               e.key === "/" &&
@@ -1358,6 +1374,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           onDialogClose();
         }}
         onItemSelect={async (item: TreeNode3 | SideBarItem, e) => {
+          // 如果模式选择器打开，不触发列表选择
+          if (modeSelectorOpen) {
+            return;
+          }
+          console.log(item, modeSelectorOpen, " = item onItemSelect");
+
           if (isSidebarItem(item)) {
             if (item.type === "custom") {
               item.onClick();
