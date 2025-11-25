@@ -465,7 +465,7 @@ const modeOptions: Array<{
   hint: string;
 }> = [
   { value: "", label: "Default", icon: "document", hint: "" },
-  { value: ":", label: "Line Mode", icon: "list", hint: "" },
+  { value: "l:", label: "Line Mode", icon: "list", hint: "" },
   { value: "@:", label: "Tag Mode", icon: "tag", hint: "" },
   {
     value: "r:",
@@ -651,7 +651,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           await initData();
         }
         open();
-        resetInputWithMode("@");
+        resetInputWithMode("@:");
       },
     });
     props.extensionAPI.ui.commandPalette.addCommand({
@@ -665,7 +665,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           await initData();
         }
         open();
-        resetInputWithMode(":");
+        resetInputWithMode("l:");
       },
     });
     props.extensionAPI.ui.commandPalette.addCommand({
@@ -817,7 +817,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     };
   };
   const modes: Record<string, (str: string) => PassProps> = {
-    ":": (str) => {
+    "l:": (str) => {
       // console.log(str, ' line mode', sources.lineMode)
       return {
         itemPredicate(query: string, item: TreeNode3) {
@@ -1540,6 +1540,22 @@ function Hints(props: { total: number; filtered: number }) {
     <div className={`${ID}-hints`}>
       <span>
         {props.filtered}/{props.total} total
+      </span>
+      <span>
+        <span className="hint-icon">@:</span>
+        <span> refs mode </span>
+      </span>
+      <span>
+        <span className="hint-icon">l:</span>
+        <span> lines mode </span>
+      </span>
+      <span>
+        <span className="hint-icon">r:</span>
+        <span> right sidebar mode </span>
+      </span>
+      <span>
+        <span className="hint-icon">e:</span>
+        <span> changes in 48 hours </span>
       </span>
     </div>
   );
