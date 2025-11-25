@@ -1,5 +1,5 @@
-import React, { FC, useEffect, useMemo, useRef, useState } from "react";
-import ReactDOM from 'react-dom';
+import React, { FC, useEffect, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import {
   Button,
   ButtonGroup,
@@ -9,61 +9,71 @@ import {
   Tag,
   Toaster,
   Tooltip,
-  OverflowList,
-  Breadcrumbs,
-  Icon
+  Icon,
 } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
-import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 
 import "./style.less";
-import { PullBlock, SidebarWindowInput, TreeNode } from "roamjs-components/types";
+import { TreeNode } from "roamjs-components/types";
 import { useEvent } from "./hooks";
 import { extension_helper, formatDate, simulateClick } from "./helper";
-import { ForbidEditRoamBlock } from "./forbird-edit-roam-block";
 import { getParentsStrFromBlockUid } from "./roam";
-import { doSwitch, initSwitchBetweenSidebarAndMain } from "./initSwitchBetweenSidebarAndMain";
+import {
+  doSwitch,
+  initSwitchBetweenSidebarAndMain,
+} from "./initSwitchBetweenSidebarAndMain";
 
-
-const delay = (ms?: number) => new Promise(resolve => {
-  setTimeout(resolve, ms)
-})
-type TreeNode2 = Omit<TreeNode, 'children'> & { parents: { id: string }[], children: TreeNode2[], deep: string, refs?: { string?: string, uid: string, title?: string }[], time: number }
-type TreeNode3 = Omit<TreeNode2, 'refs' | "chilren"> & { tags: { type: 'page' | 'block', text: string }[], string?: string }
+const delay = (ms?: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+type TreeNode2 = Omit<TreeNode, "children"> & {
+  parents: { id: string }[];
+  children: TreeNode2[];
+  deep: string;
+  refs?: { string?: string; uid: string; title?: string }[];
+  time: number;
+};
+type TreeNode3 = Omit<TreeNode2, "refs" | "chilren"> & {
+  tags: { type: "page" | "block"; text: string }[];
+  string?: string;
+};
 
 type SideBarItem = {
-  "collapsed?": boolean
-  order: number
-  "pinned?": boolean
+  "collapsed?": boolean;
+  order: number;
+  "pinned?": boolean;
   "window-id": string;
   dom: Element;
   title: string;
   uid: string;
   icon?: IconName;
 } & (
-    { type: 'custom', onClick: () => void }
-    | { type: "search-query" }
-    | { type: "graph", "page-uid": string }
-    | { type: 'block', "block-uid": string }
-    | { type: 'outline', "page-uid": string }
-    | { type: "mentions", "mentions-uid": string }
-  )
+  | { type: "custom"; onClick: () => void }
+  | { type: "search-query" }
+  | { type: "graph"; "page-uid": string }
+  | { type: "block"; "block-uid": string }
+  | { type: "outline"; "page-uid": string }
+  | { type: "mentions"; "mentions-uid": string }
+);
 
 type ITEM = SideBarItem | TreeNode3;
 
 const isSidebarItem = (item: ITEM): item is SideBarItem => {
-  return 'dom' in item
-}
-let oldHref = ''
+  return "dom" in item;
+};
+let oldHref = "";
 const api = {
   getAllChangesWithin2Day() {
-    const now = new Date();  // 获取当前时间
-    const oneDayAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));  // 获取 24 小时前的时间
+    const now = new Date(); // 获取当前时间
+    const oneDayAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000); // 获取 24 小时前的时间
     const timestamp = Math.floor(oneDayAgo.getTime());
 
-    console.time('within day')
-    const r = (window.roamAlphaAPI.data.q(
-      `
+    console.time("within day");
+    const r = (
+      window.roamAlphaAPI.data.q(
+        `
     [
             :find [(pull ?e [:edit/time :block/uid :block/string]) ...]
             :in $ ?start_of_day
@@ -72,17 +82,18 @@ const api = {
                 [(> ?time ?start_of_day)] 
         ]
     `,
-      timestamp
-    ) as unknown as TreeNode3[]
+        timestamp
+      ) as unknown as TreeNode3[]
     )
       // ** filter is much slower  than query by start_of_day
       // .filter(a => {
       //   return a.time > timestamp
       // })
       .sort((a, b) => {
-        return b.time - a.time
-      }).filter(item => item.string);
-    console.timeEnd('within day')
+        return b.time - a.time;
+      })
+      .filter((item) => item.string);
+    console.timeEnd("within day");
 
     return r;
   },
@@ -90,55 +101,69 @@ const api = {
     window.roamAlphaAPI.ui.setBlockFocusAndSelection({
       location: {
         "block-uid": item.uid,
-        "window-id": 'main-window'
-      }
-    })
+        "window-id": "main-window",
+      },
+    });
   },
   async checkIsUnderCurrentBlock(item: TreeNode3) {
-    const openUid = await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
-    const openId = window.roamAlphaAPI.q(`[:find ?e . :where [?e :block/uid "${openUid}"]]`) as unknown as string
+    const openUid =
+      await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
+    const openId = window.roamAlphaAPI.q(
+      `[:find ?e . :where [?e :block/uid "${openUid}"]]`
+    ) as unknown as string;
     // console.log(item.parents.some(p => p.id === openId), ' is Under ', item, openUid)
-    return item.parents.some(p => p.id === openId)
+    return item.parents.some((p) => p.id === openId);
   },
   async openRightsidebar() {
     await window.roamAlphaAPI.ui.rightSidebar.open();
-    await delay(10)
+    await delay(10);
   },
   toggleSidebarWindow(sidebarItem: SideBarItem) {
-    simulateClick(sidebarItem.dom.querySelector(".rm-caret"))
+    simulateClick(sidebarItem.dom.querySelector(".rm-caret"));
   },
   removeSidebarWindow(sidebarItem: SideBarItem) {
-    simulateClick(sidebarItem.dom.querySelector(".bp3-icon-cross"))
+    simulateClick(sidebarItem.dom.querySelector(".bp3-icon-cross"));
   },
   getRightSidebarItems() {
     const parentEl = document.querySelector(".sidebar-content");
     if (!parentEl) {
-      return []
+      return [];
     }
-    return window.roamAlphaAPI.ui.rightSidebar.getWindows()
+    return window.roamAlphaAPI.ui.rightSidebar
+      .getWindows()
       .sort((a, b) => a.order - b.order)
       .map((sidebarItemWindow, index) => {
-        let title = '';
-        const icons: Record<'search-query' | 'graph' | 'block' | 'outline' | 'mentions', string> = {
-          'search-query': 'panel-stats',
-          graph: 'graph',
-          "block": "symbol-circle",
-          "mentions": "properties",
-          "outline": 'application',
+        let title = "";
+        const icons: Record<
+          "search-query" | "graph" | "block" | "outline" | "mentions",
+          string
+        > = {
+          "search-query": "panel-stats",
+          graph: "graph",
+          block: "symbol-circle",
+          mentions: "properties",
+          outline: "application",
         };
         const dom = parentEl.children[index] as HTMLDivElement;
         // @ts-ignore
-        if (sidebarItemWindow.type === 'search-query' || sidebarItemWindow.type === 'graph'
-          || sidebarItemWindow.type === 'mentions'
+        if (
+          sidebarItemWindow.type === "search-query" ||
+          sidebarItemWindow.type === "graph" ||
+          sidebarItemWindow.type === "mentions"
         ) {
           // @ts-ignore
-          title = dom.querySelector(".rm-sidebar-window").firstElementChild.children[1].innerText
+          title =
+            dom.querySelector(".rm-sidebar-window").firstElementChild
+              .children[1].innerText;
         } else {
-          if (sidebarItemWindow.type === 'block') {
-            title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["block-uid"]}"] [?b :block/string ?e]]`) as unknown as string
-
+          if (sidebarItemWindow.type === "block") {
+            title = window.roamAlphaAPI.q(
+              `[:find ?e . :where [?b :block/uid "${sidebarItemWindow["block-uid"]}"] [?b :block/string ?e]]`
+            ) as unknown as string;
           } else {
-            title = window.roamAlphaAPI.q(`[:find ?e . :where [?b :block/uid "${sidebarItemWindow["page-uid"]}"] [?b :node/title ?e]]`) as unknown as string
+            title = window.roamAlphaAPI.q(
+              `[:find ?e . :where [?b :block/uid "${sidebarItemWindow["page-uid"]}"] [?b :node/title ?e]]`
+            ) as unknown as string;
           }
         }
         return {
@@ -146,8 +171,8 @@ const api = {
           uid: sidebarItemWindow["window-id"],
           dom,
           title,
-          icon: icons[sidebarItemWindow.type]
-        } as SideBarItem
+          icon: icons[sidebarItemWindow.type],
+        } as SideBarItem;
       });
   },
   async insertBlockByUid(uid: string, order: number) {
@@ -163,38 +188,40 @@ const api = {
     // console.log(parentUid, newUid, order, uid)
     await window.roamAlphaAPI.createBlock({
       block: {
-        string: '',
+        string: "",
         uid: newUid,
       },
       location: {
         "parent-uid": parentUid,
-        order: order
-      }
-    })
+        order: order,
+      },
+    });
     return { newUid, parentUid };
   },
-  async selectingBlockByUid(uid: string, shiftKeyPressed: boolean, parentUid = uid) {
+  async selectingBlockByUid(
+    uid: string,
+    shiftKeyPressed: boolean,
+    parentUid = uid
+  ) {
     if (shiftKeyPressed) {
-      window.roamAlphaAPI.ui.rightSidebar
-        .addWindow({
-          window:
-            { type: 'block', 'block-uid': uid }
-        })
+      window.roamAlphaAPI.ui.rightSidebar.addWindow({
+        window: { type: "block", "block-uid": uid },
+      });
       return;
     }
     await window.roamAlphaAPI.ui.mainWindow.openBlock({
       block: {
-        uid: parentUid
-      }
-    })
-    await delay(250)
+        uid: parentUid,
+      },
+    });
+    await delay(250);
     // TOOD: just focus on it
     window.roamAlphaAPI.ui.setBlockFocusAndSelection({
       location: {
         "block-uid": uid,
-        "window-id": 'main-window'
-      }
-    })
+        "window-id": "main-window",
+      },
+    });
   },
   getAllTaggedBlocks() {
     window.roamAlphaAPI.q(`
@@ -205,26 +232,28 @@ const api = {
       [?children :block/page ?p]
       [?children :block/refs ?refs]
 ]
-`)
+`);
   },
   async getFocusedBlockUid() {
-    return await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid()
+    return await window.roamAlphaAPI.ui.mainWindow.getOpenPageOrBlockUid();
   },
   getCurrentPageFullTreeByUid(uid: string) {
     const sortByOrder = (node: TreeNode3) => {
       const _sortByOrder = (_node: TreeNode3) => {
-        _node.children = _node.children ? _node.children.map(_sortByOrder).sort(orderSort) : []
+        _node.children = _node.children
+          ? _node.children.map(_sortByOrder).sort(orderSort)
+          : [];
         return _node;
-      }
+      };
 
       const orderSort = (a: TreeNode3, b: TreeNode3) => {
-        return a.order - b.order
-      }
+        return a.order - b.order;
+      };
       if (node.children)
-        node.children = node.children.map(_sortByOrder).sort(orderSort)
+        node.children = node.children.map(_sortByOrder).sort(orderSort);
       return node;
-    }
-    console.time("CurrentPage")
+    };
+    console.time("CurrentPage");
     const tree = window.roamAlphaAPI.q(`[:find (pull ?b [
       [:block/string :as "text"]
       :block/uid 
@@ -238,48 +267,43 @@ const api = {
       [:edit/time :as "editTime"] 
       :block/props 
       {:block/children ...}
-    ]) . :where [?b :block/uid "${uid}"]]`) as unknown as TreeNode3
-    console.timeEnd("CurrentPage")
+    ]) . :where [?b :block/uid "${uid}"]]`) as unknown as TreeNode3;
+    console.timeEnd("CurrentPage");
     return sortByOrder(tree);
   },
   recordPageAndScrollPosition() {
     oldHref = location.href;
 
-    console.log('record: ', oldHref)
+    console.log("record: ", oldHref);
   },
   restorePageAndScrollPosition() {
-    console.log('restoring: ', oldHref)
+    console.log("restoring: ", oldHref);
     setTimeout(() => {
       location.replace(oldHref);
-    }, 20)
-
+    }, 20);
   },
   async focusOnBlockWithoughtHistory(uid: string) {
-
-    const hashes = location.hash.split("/")
+    const hashes = location.hash.split("/");
     hashes.pop();
     hashes.push(uid);
     const newHash = hashes.join("/");
     var newUrl = location.origin + newHash;
     // console.log(newUrl, newHash, ' newUrl');
-    await delay(10)
+    await delay(10);
     // location.replace(newUrl);
-    await delay(10)
+    await delay(10);
 
     // window.roamAlphaAPI.ui.mainWindow.openBlock({
     //   block: {
     //     uid
     //   }
     // })
-
   },
-
-}
+};
 
 function escapeRegExpChars(text: string) {
   return text.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
 }
-
 
 function highlightText(text: string, query: string) {
   if (!text) {
@@ -288,7 +312,7 @@ function highlightText(text: string, query: string) {
   let lastIndex = 0;
   const words = query
     .split(/\s+/)
-    .filter(word => word.length > 0)
+    .filter((word) => word.length > 0)
     .map(escapeRegExpChars);
   if (words.length === 0) {
     return [text];
@@ -316,157 +340,172 @@ function highlightText(text: string, query: string) {
 }
 
 type PassProps = {
-  itemPredicate?: (query: string, item: unknown) => boolean
-  items: (v: any) => (TreeNode3 | SideBarItem)[],
-  itemRenderer: ItemRenderer<unknown>
+  itemPredicate?: (query: string, item: unknown) => boolean;
+  items: (v: any) => (TreeNode3 | SideBarItem)[];
+  itemRenderer: ItemRenderer<unknown>;
   onItemSelect?: (v: any) => void;
-}
+};
 
+type RightMenuType =
+  | "top"
+  | "right"
+  | "bottom"
+  | "switch"
+  | "remove"
+  | "switch-swap";
+type OnRightMenuClick2 = (
+  item: SideBarItem | TreeNode3,
+  type: RightMenuType,
+  e: React.MouseEvent<HTMLElement>
+) => void;
 
-type RightMenuType = "top" | 'right' | 'bottom' | 'switch' | 'remove' | 'switch-swap';
-type OnRightMenuClick2 = (item: SideBarItem | TreeNode3, type: RightMenuType, e: React.MouseEvent<HTMLElement>) => void;
-
-type OnRightMenuClick = (type: RightMenuType, e: React.MouseEvent<HTMLElement>) => void;
+type OnRightMenuClick = (
+  type: RightMenuType,
+  e: React.MouseEvent<HTMLElement>
+) => void;
 
 const RightMenu: FC<{
-  onClick: OnRightMenuClick
+  onClick: OnRightMenuClick;
 }> = (props) => {
-  return <div className="right-menu">
-    <ButtonGroup>
-      <Tooltip
-        content={
-          <span>Insert a block above</span>
-        }>
-        <Button icon="add-row-top" onClick={e => props.onClick('top', e)} />
-      </Tooltip>
+  return (
+    <div className="right-menu">
+      <ButtonGroup>
+        <Tooltip content={<span>Insert a block above</span>}>
+          <Button icon="add-row-top" onClick={(e) => props.onClick("top", e)} />
+        </Tooltip>
 
-      <Tooltip
-        content={
-          <span>Insert a block below</span>
-        }>
-        <Button icon="add-row-bottom" onClick={e => props.onClick('bottom', e)} />
-      </Tooltip>
-      <Tooltip
-        content={
-          <span>Open in sidebar</span>
-        }>
-        <Button icon="arrow-right" onClick={e => props.onClick('right', e)} />
-      </Tooltip>
-
-    </ButtonGroup>
-  </div>
-}
+        <Tooltip content={<span>Insert a block below</span>}>
+          <Button
+            icon="add-row-bottom"
+            onClick={(e) => props.onClick("bottom", e)}
+          />
+        </Tooltip>
+        <Tooltip content={<span>Open in sidebar</span>}>
+          <Button
+            icon="arrow-right"
+            onClick={(e) => props.onClick("right", e)}
+          />
+        </Tooltip>
+      </ButtonGroup>
+    </div>
+  );
+};
 
 const SidebarRightMenu: FC<{
-  onClick: OnRightMenuClick
+  onClick: OnRightMenuClick;
 }> = (props) => {
-  return <div className="right-menu">
-    <ButtonGroup>
-      <Tooltip
-        content={
-          <span>Switching in sidebar</span>
-        }>
-        <Button icon="swap-horizontal" onClick={e => props.onClick('switch-swap', e)} />
-      </Tooltip>
-      <Tooltip
-        content={
-          <span>Toggle in sidebar</span>
-        }>
-        <Button icon="segmented-control" onClick={e => props.onClick('switch', e)} />
-      </Tooltip>
-      <Tooltip
-        content={
-          <span>Remove from sidebar</span>
-        }>
-        <Button icon="small-cross" onClick={e => props.onClick('remove', e)} />
-      </Tooltip>
+  return (
+    <div className="right-menu">
+      <ButtonGroup>
+        <Tooltip content={<span>Switching in sidebar</span>}>
+          <Button
+            icon="swap-horizontal"
+            onClick={(e) => props.onClick("switch-swap", e)}
+          />
+        </Tooltip>
+        <Tooltip content={<span>Toggle in sidebar</span>}>
+          <Button
+            icon="segmented-control"
+            onClick={(e) => props.onClick("switch", e)}
+          />
+        </Tooltip>
+        <Tooltip content={<span>Remove from sidebar</span>}>
+          <Button
+            icon="small-cross"
+            onClick={(e) => props.onClick("remove", e)}
+          />
+        </Tooltip>
+      </ButtonGroup>
+    </div>
+  );
+};
 
-    </ButtonGroup>
-  </div>
-}
+export default function Extension(props: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {}
 
-
-export default function Extension(props: { isOpen: boolean, onClose: () => void }) {
-
-}
-
-const toast = Toaster.create({
-
-})
-function BlockDiv(props: { uid: string, "zoom-path"?: boolean }) {
-  const ref = useRef<HTMLDivElement>()
+const toast = Toaster.create({});
+function BlockDiv(props: { uid: string; "zoom-path"?: boolean }) {
+  const ref = useRef<HTMLDivElement>();
   useEffect(() => {
     window.roamAlphaAPI.ui.components.renderBlock({
       uid: props.uid,
       el: ref.current,
       // @ts-ignore
-      "zoom-path?": props["zoom-path"]
-    })
-  }, [])
-  return <div ref={ref} />
+      "zoom-path?": props["zoom-path"],
+    });
+  }, []);
+  return <div ref={ref} />;
 }
 
-let lastedCloseTime: number
+let lastedCloseTime: number;
 
 const isFetchAgainIn5Seconds = () => {
   if (!lastedCloseTime) {
-    lastedCloseTime = Date.now()
+    lastedCloseTime = Date.now();
   } else {
-    if ((Date.now() - lastedCloseTime) < (1000 & 5)) {
-      console.log(' not now')
+    if (Date.now() - lastedCloseTime < (1000 & 5)) {
+      console.log(" not now");
       return true;
     }
   }
   return false;
-}
+};
 
 let AppIsOpen = false;
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
   // const [query, setQuery] = useState("");
   const zoomStacks = useZoomStacks();
-  const { query, sources } = zoomStacks.currentStack()
+  const { query, sources } = zoomStacks.currentStack();
 
-  const inputRef = useRef<HTMLInputElement>()
+  const inputRef = useRef<HTMLInputElement>();
   const refs = useRef({
-    query: '',
-    isClosing: false
+    query: "",
+    isClosing: false,
   });
-  refs.current.query = query
-  console.log(query, ' = query')
+  refs.current.query = query;
+  console.log(query, " = query");
 
   const getSidebarModeData = async () => {
-    console.time("Sidebar")
-    await delay(20)
-    const rightSidebarItems = await api.getRightSidebarItems()
+    console.time("Sidebar");
+    await delay(20);
+    const rightSidebarItems = await api.getRightSidebarItems();
     const result = rightSidebarItems.concat([
       {
         dom: {},
-        type: 'custom', title: 'Clear Sidebar', uid: 'clean-sidebar', icon: 'remove',
+        type: "custom",
+        title: "Clear Sidebar",
+        uid: "clean-sidebar",
+        icon: "remove",
         onClick() {
-          rightSidebarItems.forEach(item => {
-            onRightMenuClick(item, 'remove', { preventDefault: () => { }, stopPropagation: () => { } } as React.MouseEvent<HTMLElement>)
-          })
-        }
+          rightSidebarItems.forEach((item) => {
+            onRightMenuClick(item, "remove", {
+              preventDefault: () => {},
+              stopPropagation: () => {},
+            } as React.MouseEvent<HTMLElement>);
+          });
+        },
       },
-    ] as SideBarItem[])
-    console.timeEnd('Sidebar')
+    ] as SideBarItem[]);
+    console.timeEnd("Sidebar");
     return result;
-  }
+  };
   const initData = async () => {
     api.recordPageAndScrollPosition();
 
-    console.log(Date.now() - lastedCloseTime < 10000, ' ---@=')
+    console.log(Date.now() - lastedCloseTime < 10000, " ---@=");
 
     if (isFetchAgainIn5Seconds()) {
       return;
     }
     console.time("init");
-    console.time('Source');
+    console.time("Source");
 
     const pageUid = getPageUid();
-    api
-    await zoomStacks.open(pageUid, getStringByUid(pageUid))
+    api;
+    await zoomStacks.open(pageUid, getStringByUid(pageUid));
     // setTree(withParents(roamApi.getCurrentPageFullTreeByUid(pageUid) as TreeNode3, []));
     // const flatted = flatTree(api.getCurrentPageFullTreeByUid(pageUid));
     // console.timeEnd('Source')
@@ -479,106 +518,103 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     //   changedMode: api.getAllChangesWithin2Day()
     // });
 
-    console.timeEnd("init")
+    console.timeEnd("init");
 
     // 默认
     // setPassProps(defaultFn(""));
-  }
+  };
 
   const resetInputWithMode = async (nextMode: string) => {
-    const value = (inputRef.current?.value) || "";
-    const modeName = Object.keys(modes).find(mode => {
-      return value.startsWith(mode)
-    })
+    const value = inputRef.current?.value || "";
+    const modeName = Object.keys(modes).find((mode) => {
+      return value.startsWith(mode);
+    });
     let query = `${nextMode}${value}`;
     if (modeName) {
-      query = nextMode + value.substring(modeName.length)
+      query = nextMode + value.substring(modeName.length);
     }
-    setActiveItem(undefined)
+    setActiveItem(undefined);
     handleQueryChange(query);
-    findActiveItem()
-    await delay(100)
-    inputRef.current.setSelectionRange(nextMode.length, query.length)
-
-  }
+    findActiveItem();
+    await delay(100);
+    inputRef.current.setSelectionRange(nextMode.length, query.length);
+  };
   const openSidebar = async () => {
     await api.openRightsidebar();
-    const sidebarMode = await getSidebarModeData()
-    zoomStacks.changeSidebarMode(sidebarMode)
-    await delay(20)
-  }
+    const sidebarMode = await getSidebarModeData();
+    zoomStacks.changeSidebarMode(sidebarMode);
+    await delay(20);
+  };
   useEffect(() => {
     props.extensionAPI.ui.commandPalette.addCommand({
-      label: 'Open Switch+',
-      "default-hotkey": ['super-shift-p'],
+      label: "Open Switch+",
+      "default-hotkey": ["super-shift-p"],
       async callback() {
         if (inPageCheck()) {
-          return
+          return;
         }
         if (!AppIsOpen) {
-          await initData()
+          await initData();
         }
         open();
-        resetInputWithMode("")
+        resetInputWithMode("");
       },
-    })
+    });
     props.extensionAPI.ui.commandPalette.addCommand({
-      label: 'Open Switch+ in Tag Mode',
+      label: "Open Switch+ in Tag Mode",
       // "default-hotkey": ['super-shift-o'],
       async callback() {
         if (inPageCheck()) {
-          return
+          return;
         }
         if (!AppIsOpen) {
-          await initData()
+          await initData();
         }
         open();
-        resetInputWithMode("@")
-
+        resetInputWithMode("@");
       },
-    })
+    });
     props.extensionAPI.ui.commandPalette.addCommand({
-      label: 'Open Switch+ in Line Mode',
+      label: "Open Switch+ in Line Mode",
       // "default-hotkey": ['super-shift-l'],
       async callback() {
         if (inPageCheck()) {
-          return
+          return;
         }
         if (!AppIsOpen) {
-          await initData()
+          await initData();
         }
         open();
-        resetInputWithMode(":")
+        resetInputWithMode(":");
       },
-    })
+    });
     props.extensionAPI.ui.commandPalette.addCommand({
-      label: 'Open Switch+ in Sidebar Mode',
+      label: "Open Switch+ in Sidebar Mode",
       // "default-hotkey": ['super-shift-u'],
       async callback() {
         if (inPageCheck()) {
-          return
+          return;
         }
         await openSidebar();
         open();
-        resetInputWithMode("r:")
+        resetInputWithMode("r:");
       },
-    })
+    });
     props.extensionAPI.ui.commandPalette.addCommand({
-      label: 'Open Switch+ in Latest Edit Mode',
+      label: "Open Switch+ in Latest Edit Mode",
       // "default-hotkey": ['super-shift-e'],
       async callback() {
         if (inPageCheck()) {
-          return
+          return;
         }
         if (!AppIsOpen) {
-          await initData()
+          await initData();
         }
         open();
-        resetInputWithMode("e:")
+        resetInputWithMode("e:");
       },
-    })
+    });
   }, []);
-
 
   const open = async () => {
     AppIsOpen = true;
@@ -586,23 +622,21 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     setOpen(true);
     setTimeout(() => {
       AppIsOpen = false;
-
-    }, 120)
-
-  }
+    }, 120);
+  };
 
   const [passProps, setPassProps] = useState<PassProps>({
     items: () => [],
     itemRenderer: () => <></>,
-    onItemSelect: () => { },
+    onItemSelect: () => {},
   });
 
   const sidebarSwitch = async (item: SideBarItem) => {
-    doSwitch(item as any)
-    await openSidebar()
-    inputRef.current?.focus()
+    doSwitch(item as any);
+    await openSidebar();
+    inputRef.current?.focus();
     api.recordPageAndScrollPosition();
-  }
+  };
 
   const onRightMenuClick: OnRightMenuClick2 = async (item, type, e) => {
     e.preventDefault();
@@ -610,35 +644,33 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     const handles = {
       right: () => {
         api.selectingBlockByUid(item.uid, true);
-
       },
       top: async () => {
-        changeSelected(!e.shiftKey)
-        const newUid = await api.insertBlockByUid(item.uid, item.order)
-        api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
+        changeSelected(!e.shiftKey);
+        const newUid = await api.insertBlockByUid(item.uid, item.order);
+        api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid);
         onDialogClose();
-
       },
       bottom: async () => {
-        changeSelected(!e.shiftKey)
-        const newUid = await api.insertBlockByUid(item.uid, item.order + 1)
-        api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid)
+        changeSelected(!e.shiftKey);
+        const newUid = await api.insertBlockByUid(item.uid, item.order + 1);
+        api.selectingBlockByUid(newUid.newUid, e.shiftKey, newUid.parentUid);
         onDialogClose();
       },
       switch: () => {
-        api.toggleSidebarWindow(item as SideBarItem)
+        api.toggleSidebarWindow(item as SideBarItem);
       },
-      'switch-swap': () => {
-        sidebarSwitch(item as SideBarItem)
+      "switch-swap": () => {
+        sidebarSwitch(item as SideBarItem);
       },
 
       remove: () => {
         api.removeSidebarWindow(item as SideBarItem);
         zoomStacks.changeSidebarMode(
-          sources.sidebarMode.filter(_m => {
-            return _m.uid !== item.uid
+          sources.sidebarMode.filter((_m) => {
+            return _m.uid !== item.uid;
           })
-        )
+        );
 
         // setSources(prev => {
         //   return {
@@ -648,12 +680,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         //     })
         //   }
         // })
-      }
-    }
+      },
+    };
     await handles[type]();
-  }
+  };
   // 记录当前网址和滑动的距离
-  // 
+  //
   const defaultFn = (str: string) => {
     // 查询的是字符串
     return {
@@ -663,254 +695,324 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         if (!query) {
           return true;
         }
-        return str ? item.text.toLowerCase().includes(str.toLowerCase()) : false;
+        return str
+          ? item.text.toLowerCase().includes(str.toLowerCase())
+          : false;
       },
       itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
         // console.log(item, ' = render', itemProps)
-        return <MenuItem
-          style={{
-            paddingLeft: (item.parents?.length || 0) * 15
-          }}
-          {...itemProps.modifiers}
-          text={
-            <div
-              className={`switch-result-item ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}`}
-            >
-              <span className="rm-bullet__inner" />
-              <div className="ellipsis">
-                {
-                  highlightText(item.text, str)
-                }
-              </div>
+        return (
+          <MenuItem
+            style={{
+              paddingLeft: (item.parents?.length || 0) * 15,
+            }}
+            {...itemProps.modifiers}
+            text={
+              <div
+                className={`switch-result-item ${
+                  itemProps.modifiers.active ? "switch-result-item-active" : ""
+                }`}
+              >
+                <span className="rm-bullet__inner" />
+                <div className="ellipsis">{highlightText(item.text, str)}</div>
 
-              <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
-            </div>
-          }
-          onClick={(e) => {
-            if (e.shiftKey) {
-              api.selectingBlockByUid(item.uid, true)
-              return;
+                <RightMenu
+                  onClick={(type, e) => onRightMenuClick(item, type, e)}
+                />
+              </div>
             }
-            setActiveItemByItem(item);
-          }}
-          onDoubleClick={e => {
-            itemProps.handleClick(e)
-          }}
-        >
-        </MenuItem>
-      }
+            onClick={(e) => {
+              if (e.shiftKey) {
+                api.selectingBlockByUid(item.uid, true);
+                return;
+              }
+              setActiveItemByItem(item);
+            }}
+            onDoubleClick={(e) => {
+              itemProps.handleClick(e);
+            }}
+          ></MenuItem>
+        );
+      },
     };
-  }
+  };
   const modes: Record<string, (str: string) => PassProps> = {
     ":": (str) => {
       // console.log(str, ' line mode', sources.lineMode)
       return {
         itemPredicate(query: string, item: TreeNode3) {
-          return item.deep.startsWith(str) || item.deep.split(".").join("").startsWith(str);
+          return (
+            item.deep.startsWith(str) ||
+            item.deep.split(".").join("").startsWith(str)
+          );
         },
         items: (_sources: typeof sources) => _sources.lineMode,
         itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
-          return <MenuItem
-            {...itemProps.modifiers}
-            text={
-              <div
-                className={`switch-result-item 
-                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
-                               `} >
-
-                <div className="deep">
-                  {highlightText(item.deep, str)}
+          return (
+            <MenuItem
+              {...itemProps.modifiers}
+              text={
+                <div
+                  className={`switch-result-item 
+                               ${
+                                 itemProps.modifiers.active
+                                   ? "switch-result-item-active"
+                                   : ""
+                               }
+                               `}
+                >
+                  <div className="deep">{highlightText(item.deep, str)}</div>
+                  <div className="ellipsis">{item.text}</div>
+                  <RightMenu
+                    onClick={(type, e) => onRightMenuClick(item, type, e)}
+                  />
                 </div>
-                <div className="ellipsis">
-                  {item.text}
-                </div>
-                <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
-              </div>
-            }
-            onClick={(e) => {
-              if (e.shiftKey) {
-                api.selectingBlockByUid(item.uid, true)
-                return;
               }
-              setActiveItemByItem(item);
-            }}
-            onDoubleClick={e => {
-              itemProps.handleClick(e)
-            }}
-          >
-          </MenuItem>
-        }
-      }
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  api.selectingBlockByUid(item.uid, true);
+                  return;
+                }
+                setActiveItemByItem(item);
+              }}
+              onDoubleClick={(e) => {
+                itemProps.handleClick(e);
+              }}
+            ></MenuItem>
+          );
+        },
+      };
     },
     "@": (str) => {
-
       return {
         itemPredicate(query, item: TreeNode3) {
-          return item.tags.some(ref => ref.text.toLowerCase().includes(str.toLowerCase()));
+          return item.tags.some((ref) =>
+            ref.text.toLowerCase().includes(str.toLowerCase())
+          );
         },
         items: (_sources: typeof sources) => _sources.tagMode,
         itemRenderer: (item: TreeNode3, itemProps: IItemRendererProps) => {
           // console.log(item, ' = render', itemProps, query, sources.tagMode)
-          return <MenuItem
-            {...itemProps.modifiers}
-            text={
-              <div
-                className={`switch-result-item tag-mode
-                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
-                               `} >
-                {
-                  item.tags
+          return (
+            <MenuItem
+              {...itemProps.modifiers}
+              text={
+                <div
+                  className={`switch-result-item tag-mode
+                               ${
+                                 itemProps.modifiers.active
+                                   ? "switch-result-item-active"
+                                   : ""
+                               }
+                               `}
+                >
+                  {item.tags
                     // ?.filter(ref => {
                     //   return ref.text.includes(str)
                     // })
-                    ?.map(ref => {
-                      console.log(ref, ' ---- tags')
-                      return <Tag
-                        icon={ref.type === 'page' ? <span className="rm-icon-key-prompt">{`[[`}</span> : <span className="rm-icon-key-prompt">{`((`}</span>}
-                        className="rm-page-ref--tag">{highlightText(ref.text, str)}</Tag>
+                    ?.map((ref) => {
+                      console.log(ref, " ---- tags");
+                      return (
+                        <Tag
+                          icon={
+                            ref.type === "page" ? (
+                              <span className="rm-icon-key-prompt">{`[[`}</span>
+                            ) : (
+                              <span className="rm-icon-key-prompt">{`((`}</span>
+                            )
+                          }
+                          className="rm-page-ref--tag"
+                        >
+                          {highlightText(ref.text, str)}
+                        </Tag>
+                      );
                     })}
 
-                <RightMenu onClick={(type, e) => onRightMenuClick(item, type, e)} />
-              </div>
-            }
-            onClick={(e) => {
-              if (e.shiftKey) {
-                api.selectingBlockByUid(item.uid, true)
-                return;
+                  <RightMenu
+                    onClick={(type, e) => onRightMenuClick(item, type, e)}
+                  />
+                </div>
               }
-              setActiveItemByItem(item);
-            }}
-            onDoubleClick={e => {
-              itemProps.handleClick(e)
-            }}
-          >
-          </MenuItem>
-        }
-
-      }
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  api.selectingBlockByUid(item.uid, true);
+                  return;
+                }
+                setActiveItemByItem(item);
+              }}
+              onDoubleClick={(e) => {
+                itemProps.handleClick(e);
+              }}
+            ></MenuItem>
+          );
+        },
+      };
     },
     "s:": defaultFn,
     "r:": (str) => {
       return {
         items: (_sources: typeof sources) => _sources.sidebarMode,
         itemPredicate(query, item: SideBarItem) {
-          return item.title.toLowerCase().includes(str.toLowerCase())
+          return item.title.toLowerCase().includes(str.toLowerCase());
         },
         itemRenderer(item: SideBarItem, itemProps: IItemRendererProps) {
           // console.log(item, ' = render', itemProps, query, sources.tagMode)
-          let content = <>
-            <Button icon={item.icon}
-              active={false}
-              fill
-              minimal
-              alignText="left"
-              text={<span style={{ color: itemProps.modifiers.active ? 'white' : 'inherit' }}>
-                {item.title}
-              </span>}
-              rightIcon={
-                <SidebarRightMenu onClick={(type, e) => { onRightMenuClick(item, type, e) }} />
-              }
-            />
-          </>
-          if (item.type === 'custom') {
-            content = <>
-              <Button icon={item.icon} fill minimal alignText="left" text={item.title} />
+          let content = (
+            <>
+              <Button
+                icon={item.icon}
+                active={false}
+                fill
+                minimal
+                alignText="left"
+                text={
+                  <span
+                    style={{
+                      color: itemProps.modifiers.active ? "white" : "inherit",
+                    }}
+                  >
+                    {item.title}
+                  </span>
+                }
+                rightIcon={
+                  <SidebarRightMenu
+                    onClick={(type, e) => {
+                      onRightMenuClick(item, type, e);
+                    }}
+                  />
+                }
+              />
             </>
+          );
+          if (item.type === "custom") {
+            content = (
+              <>
+                <Button
+                  icon={item.icon}
+                  fill
+                  minimal
+                  alignText="left"
+                  text={item.title}
+                />
+              </>
+            );
           }
-          return <MenuItem
-            {...itemProps.modifiers}
-            text={
-              <div
-                className={`switch-result-item ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}`} >
-                {content}
-              </div>
-            }
-            onClick={item.type === 'custom' ? itemProps.handleClick : (e) => {
-              setActiveItem(item);
-              focusSidebarWindow(item);
-            }}>
-          </MenuItem>
-        }
-      }
+          return (
+            <MenuItem
+              {...itemProps.modifiers}
+              text={
+                <div
+                  className={`switch-result-item ${
+                    itemProps.modifiers.active
+                      ? "switch-result-item-active"
+                      : ""
+                  }`}
+                >
+                  {content}
+                </div>
+              }
+              onClick={
+                item.type === "custom"
+                  ? itemProps.handleClick
+                  : (e) => {
+                      setActiveItem(item);
+                      focusSidebarWindow(item);
+                    }
+              }
+            ></MenuItem>
+          );
+        },
+      };
     },
     "e:": (str) => {
       return {
         items: (_sources: typeof sources) => _sources.changedMode,
         itemPredicate(query, item: TreeNode3) {
-          return item.string.toLowerCase().includes(str.toLowerCase())
+          return item.string.toLowerCase().includes(str.toLowerCase());
         },
         itemRenderer(item: TreeNode3, itemProps: IItemRendererProps) {
           // console.log(item, ' = render', itemProps, query, sources.tagMode)
-          let content = <>
-            <Button
-              active={false}
-              fill minimal alignText="left" text={
-                highlightText(item.string, str)
-              }
-              rightIcon={
-                <div className="right-menu">
-                  <Tooltip
-                    content={
-                      <span>Open in sidebar</span>
-                    }>
-                    <Button icon="arrow-right" onClick={e => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      api.selectingBlockByUid(item.uid, true);
-                    }} />
-                  </Tooltip>
+          let content = (
+            <>
+              <Button
+                active={false}
+                fill
+                minimal
+                alignText="left"
+                text={highlightText(item.string, str)}
+                rightIcon={
+                  <div className="right-menu">
+                    <Tooltip content={<span>Open in sidebar</span>}>
+                      <Button
+                        icon="arrow-right"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          api.selectingBlockByUid(item.uid, true);
+                        }}
+                      />
+                    </Tooltip>
+                  </div>
+                }
+              />
+            </>
+          );
+          return (
+            <MenuItem
+              {...itemProps.modifiers}
+              text={
+                <div
+                  className={`switch-result-item
+                               ${
+                                 itemProps.modifiers.active
+                                   ? "switch-result-item-active"
+                                   : ""
+                               }
+                               `}
+                  style={{ alignItems: "end" }}
+                >
+                  {content}
+                  <small
+                    style={{ minWidth: 110, opacity: 0.6, textAlign: "end" }}
+                  >
+                    {formatDate(new Date(item.time))}
+                  </small>
                 </div>
               }
-            />
-          </>
-          return <MenuItem
-            {...itemProps.modifiers}
-            text={
-              <div
-                className={`switch-result-item
-                               ${itemProps.modifiers.active ? 'switch-result-item-active' : ''}
-                               `}
-                style={{ alignItems: 'end' }}
-              >
-                {content}
-                <small style={{ minWidth: 110, opacity: 0.6, textAlign: 'end' }}>{formatDate(new Date(item.time))}</small>
-              </div>
-            }
-            onClick={(e) => {
-              if (e.shiftKey) {
-                api.selectingBlockByUid(item.uid, true)
-                return;
-              }
-              setActiveItemByItem(item);
-            }}
-            onDoubleClick={e => {
-              itemProps.handleClick(e)
-            }}
-          >
-          </MenuItem>
-        }
-      }
-    }
-  }
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  api.selectingBlockByUid(item.uid, true);
+                  return;
+                }
+                setActiveItemByItem(item);
+              }}
+              onDoubleClick={(e) => {
+                itemProps.handleClick(e);
+              }}
+            ></MenuItem>
+          );
+        },
+      };
+    },
+  };
   function setActiveItemByItem(item: TreeNode3 | SideBarItem) {
-
-    setActiveItem(item)
-    madeActiveItemChange(item)
+    setActiveItem(item);
+    madeActiveItemChange(item);
   }
 
-  console.log(sources, ' ---@')
-  const itemsSource = passProps.items(sources)
+  console.log(sources, " ---@");
+  const itemsSource = passProps.items(sources);
 
   const findActiveItem = useEvent(async () => {
     const uid = oldHref.split("/").pop();
-    let activeItem = itemsSource.find(item => item.uid === uid)
+    let activeItem = itemsSource.find((item) => item.uid === uid);
     // console.log(uid, ' = uid item', activeItem)
     if (!activeItem) {
-      activeItem = itemsSource[0]
+      activeItem = itemsSource[0];
     }
-    setActiveItem(activeItem)
-    madeActiveItemChange(activeItem, true)
-  })
+    setActiveItem(activeItem);
+    madeActiveItemChange(activeItem, true);
+  });
 
   const focusSidebarWindow = async (item: SideBarItem) => {
     if (refs.current.isClosing || !item) {
@@ -918,13 +1020,13 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     }
     setTimeout(() => {
       item.dom?.scrollIntoView?.({
-        behavior: 'smooth',
-        block: 'start'
+        behavior: "smooth",
+        block: "start",
       });
-    }, 10)
+    }, 10);
 
-    console.log('dom; ', item)
-  }
+    console.log("dom; ", item);
+  };
 
   // const focusOnItem = async (item: TreeNode3) => {
   //   if (await api.checkIsUnderCurrentBlock(item)) {
@@ -932,52 +1034,54 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   //     return true;
   //   }
   // }
-  const madeActiveItemChange = async (item: TreeNode3 | SideBarItem, immediately = false) => {
-    await delay(10)
+  const madeActiveItemChange = async (
+    item: TreeNode3 | SideBarItem,
+    immediately = false
+  ) => {
+    await delay(10);
     // console.log(item, ' --- delay')
     if (isSidebarItem(item)) {
-      focusSidebarWindow(item)
-      return
+      focusSidebarWindow(item);
+      return;
     }
 
     // if (await focusOnItem(item)) {
     // return
     // }
-    scrollToActiveItem(item, immediately)
-    await api.focusOnBlockWithoughtHistory(item.uid)
-    inputRef.current.focus()
-  }
+    scrollToActiveItem(item, immediately);
+    await api.focusOnBlockWithoughtHistory(item.uid);
+    inputRef.current.focus();
+  };
   useEffect(() => {
     if (isOpen) {
     } else {
       setTimeout(() => {
-        zoomStacks.clean()
-        changeSelected(false)
-      }, 20)
+        zoomStacks.clean();
+        changeSelected(false);
+      }, 20);
     }
-  }, [isOpen])
-  const selected = useRef(false)
+  }, [isOpen]);
+  const selected = useRef(false);
   function changeSelected(next: boolean) {
     selected.current = next;
   }
   const handleClose = () => {
     refs.current.isClosing = true;
-    setOpen(false)
-    lastedCloseTime = Date.now()
-  }
+    setOpen(false);
+    lastedCloseTime = Date.now();
+  };
   const onDialogClose = () => {
     // api.clearHistory
-    console.log('on close: 1', selected)
+    console.log("on close: 1", selected);
     if (!selected.current) {
-      api.restorePageAndScrollPosition()
+      api.restorePageAndScrollPosition();
     }
     handleClose();
-  }
+  };
 
   const [activeItem, setActiveItem] = useState<TreeNode3 | SideBarItem>();
   async function handleQueryChange(_query: string) {
-
-    const tag = Object.keys(modes).find(mode => {
+    const tag = Object.keys(modes).find((mode) => {
       if (_query.startsWith(mode)) {
         return true;
       }
@@ -985,75 +1089,71 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     });
 
     // console.log('handle query change: ', query, tag)
-    if (tag === 'r:' && !query.startsWith('r:')) {
-      await openSidebar()
+    if (tag === "r:" && !query.startsWith("r:")) {
+      await openSidebar();
     }
     const fn = modes[tag] || defaultFn;
     const str = modes[tag] ? _query.substring(tag.length) : _query;
     setPassProps(fn(str.trim()));
     // setQuery(_query)
-    zoomStacks.changeQuery(_query)
+    zoomStacks.changeQuery(_query);
   }
-
-
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const filteredItems = useRef<(TreeNode3 | SideBarItem)[]>([]);
-  let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => { };
-  console.log(query, passProps, itemsSource)
+  let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => {};
+  console.log(query, passProps, itemsSource);
   const isRightSidebarMode = query.startsWith("r:");
   return (
     <div>
       <Omnibar<TreeNode3 | SideBarItem>
-        className={`${ID} ${isRightSidebarMode ? `${ID}-sidebar-mode` : ''}`}
+        className={`${ID} ${isRightSidebarMode ? `${ID}-sidebar-mode` : ""}`}
         isOpen={isOpen}
         scrollToActiveItem
         activeItem={activeItem}
         inputProps={{
+          leftElement: <Icon icon="search" />,
           inputRef: inputRef,
-          placeholder: '',
+          placeholder: "",
           onBlur() {
             // console.log(" blur")
           },
           onKeyDownCapture(e) {
             // 侧边栏模式不进去.
-            if (activeItem && 'dom' in activeItem) {
-
-              if (e.key === 'Tab') {
-                sidebarSwitch(activeItem)
+            if (activeItem && "dom" in activeItem) {
+              if (e.key === "Tab") {
+                sidebarSwitch(activeItem);
               }
               return;
             }
-            console.log(e.key, e.shiftKey, activeItem, '_______')
-            if (e.key === 'Tab') {
+            console.log(e.key, e.shiftKey, activeItem, "_______");
+            if (e.key === "Tab") {
               if (e.shiftKey) {
-                zoomStacks.zoomOut()
+                zoomStacks.zoomOut();
               } else {
-                zoomStacks.zoomIn(activeItem.uid)
+                zoomStacks.zoomIn(activeItem.uid);
               }
               e.preventDefault();
-              e.stopPropagation()
+              e.stopPropagation();
             }
           },
-
         }}
         onClose={(e) => {
           // console.log(e, e.type, ' ----@type')
-          onDialogClose()
+          onDialogClose();
         }}
         onItemSelect={async (item: TreeNode3 | SideBarItem, e) => {
           if (isSidebarItem(item)) {
-            if (item.type === 'custom') {
+            if (item.type === "custom") {
               item.onClick();
             }
-            onDialogClose()
+            onDialogClose();
             return;
           }
           const shiftKeyPressed = (e as any).shiftKey;
-          changeSelected(!shiftKeyPressed)
+          changeSelected(!shiftKeyPressed);
           onDialogClose();
           if (query.startsWith("e:")) {
-
           }
           // if (!await focusOnItem(item)) {
           api.selectingBlockByUid(item.uid, shiftKeyPressed);
@@ -1061,20 +1161,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         }}
         {...passProps}
         itemRenderer={(item, itemProps) => {
-
           return passProps.itemRenderer(item, {
-            ...itemProps, handleClick: (e) => {
+            ...itemProps,
+            handleClick: (e) => {
               if (e.shiftKey) {
-                api.selectingBlockByUid(item.uid, true)
+                api.selectingBlockByUid(item.uid, true);
               } else {
-                itemProps.handleClick(e)
+                itemProps.handleClick(e);
               }
-            }
-          })
+            },
+          });
         }}
         items={itemsSource}
         onQueryChange={(query) => {
-          handleQueryChange(query)
+          handleQueryChange(query);
         }}
         onActiveItemChange={(_activeItem: TreeNode3 | SideBarItem) => {
           if (!_activeItem) {
@@ -1082,19 +1182,24 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           }
 
           // right side bar mode
-          if ('dom' in _activeItem) {
-            setActiveItem(_activeItem)
-            scrollToActiveItem(_activeItem, true)
-            focusSidebarWindow(_activeItem)
+          if ("dom" in _activeItem) {
+            setActiveItem(_activeItem);
+            scrollToActiveItem(_activeItem, true);
+            focusSidebarWindow(_activeItem);
             return;
           }
 
           if (selected.current || refs.current.isClosing || AppIsOpen) {
-            return
+            return;
           }
 
-          console.log(activeItem, ' --active change-- ', _activeItem, AppIsOpen);
-          setActiveItemByItem(_activeItem)
+          console.log(
+            activeItem,
+            " --active change-- ",
+            _activeItem,
+            AppIsOpen
+          );
+          setActiveItemByItem(_activeItem);
         }}
         resetOnQuery
         resetOnSelect
@@ -1103,71 +1208,91 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         itemListRenderer={(itemListProps) => {
           filteredItems.current = itemListProps.filteredItems;
           scrollToActiveItem = (node: { uid: string }, immediately = false) => {
-            const index = filteredItems.current.findIndex(item => item.uid === node.uid)
+            const index = filteredItems.current.findIndex(
+              (item) => item.uid === node.uid
+            );
             virtuosoRef.current?.scrollIntoView({
               index,
-              behavior: immediately ? 'auto' : 'smooth',
-              align: 'center'
+              behavior: immediately ? "auto" : "smooth",
+              align: "center",
             });
             // console.log(index, ' = index', itemListProps.activeItem, node, filteredItems.current)
-          }
+          };
 
-          return <div>
-            {
-              zoomStacks.stacks.length <= -1 ? null :
+          return (
+            <div>
+              {zoomStacks.stacks.length <= -1 ? null : (
                 <div>
                   <div className="rm-zoom zoom-path-view">
                     {zoomStacks.stacks.map((stack, index, arr) => {
-                      return <div className="rm-zoom-item" style={{ position: 'relative' }} onClick={() => {
-                        zoomStacks.zoomTo(stack.uid)
-                      }}>
-                        <span className="rm-zoom-item-content">
-                          {stack.text}
-                        </span>
-                        {index !== arr.length - 1 ? <Icon icon="chevron-right" /> : null}
-                        {index === arr.length - 1 ? <div style={{
-                          position: 'absolute', display: 'flex', inset: 0
-                        }}
-
+                      return (
+                        <div
+                          className="rm-zoom-item"
+                          style={{ position: "relative" }}
+                          onClick={() => {
+                            zoomStacks.zoomTo(stack.uid);
+                          }}
                         >
-                          <div className="rm-zoom-mask" />
-                        </div> : null}
-
-                      </div>
+                          <span className="rm-zoom-item-content">
+                            {stack.text}
+                          </span>
+                          {index !== arr.length - 1 ? (
+                            <Icon icon="chevron-right" />
+                          ) : null}
+                          {index === arr.length - 1 ? (
+                            <div
+                              style={{
+                                position: "absolute",
+                                display: "flex",
+                                inset: 0,
+                              }}
+                            >
+                              <div className="rm-zoom-mask" />
+                            </div>
+                          ) : null}
+                        </div>
+                      );
                     })}
                   </div>
                 </div>
-            }
-            <div className="flex" style={{ maxHeight: 500 }}>
-              <Menu>
-                <Virtuoso
-                  ref={virtuosoRef}
-                  style={{ height: '500px' }}
-                  totalCount={itemListProps.filteredItems.length}
-                  itemContent={index => {
-                    return itemListProps.renderItem(itemListProps.filteredItems[index], index)
-                  }}
-                />
-              </Menu>
-              {isRightSidebarMode ? null
-                : activeItem?.uid ?
+              )}
+              <div className="flex" style={{ maxHeight: 500 }}>
+                <Menu>
+                  <Virtuoso
+                    ref={virtuosoRef}
+                    style={{ height: "500px" }}
+                    totalCount={itemListProps.filteredItems.length}
+                    itemContent={(index) => {
+                      return itemListProps.renderItem(
+                        itemListProps.filteredItems[index],
+                        index
+                      );
+                    }}
+                  />
+                </Menu>
+                {isRightSidebarMode ? null : activeItem?.uid ? (
                   <Preview uid={activeItem?.uid} key={activeItem?.uid} />
-                  : null}
+                ) : null}
+              </div>
+              <Hints
+                total={itemListProps.items.length}
+                filtered={itemListProps.filteredItems.length}
+              />
             </div>
-            <Hints total={itemListProps.items.length} filtered={itemListProps.filteredItems.length} />
-          </div>
+          );
         }}
         overlayProps={{
-          portalClassName: isOpen ? 'open-portal' : 'close-portal'
+          portalClassName: isOpen ? "open-portal" : "close-portal",
         }}
       />
-    </div >
+    </div>
   );
 }
 function getPageUid() {
   const pageOrBlockUid = oldHref.split("/").pop();
 
-  const pageUid = (window.roamAlphaAPI.q(`[
+  const pageUid =
+    (window.roamAlphaAPI.q(`[
         :find ?e .
         :where
           [?b :block/uid "${pageOrBlockUid}"]
@@ -1177,25 +1302,31 @@ function getPageUid() {
   return pageUid;
 }
 
-function Hints(props: { total: number, filtered: number }) {
-  return <div className={`${ID}-hints`}>
-    <span>
-      {props.filtered}/{props.total} total
-    </span>
+function Hints(props: { total: number; filtered: number }) {
+  return (
+    <div className={`${ID}-hints`}>
+      <span>
+        {props.filtered}/{props.total} total
+      </span>
 
-    <span>
-      <span className="hint-icon">@</span><span> refs mode </span>
-    </span>
-    <span >
-      <span className="hint-icon">:</span><span> lines mode </span>
-    </span>
-    <span >
-      <span className="hint-icon">r:</span><span> right sidebar mode </span>
-    </span>
-    <span >
-      <span className="hint-icon">e:</span><span> changes in 48 hours  </span>
-    </span>
-  </div>
+      <span>
+        <span className="hint-icon">@</span>
+        <span> refs mode </span>
+      </span>
+      <span>
+        <span className="hint-icon">:</span>
+        <span> lines mode </span>
+      </span>
+      <span>
+        <span className="hint-icon">r:</span>
+        <span> right sidebar mode </span>
+      </span>
+      <span>
+        <span className="hint-icon">e:</span>
+        <span> changes in 48 hours </span>
+      </span>
+    </div>
+  );
 }
 
 function Preview({ uid }: { uid: string }) {
@@ -1203,32 +1334,32 @@ function Preview({ uid }: { uid: string }) {
   useEffect(() => {
     let unmounted = false;
     if (uid) {
-
       setTimeout(() => {
         if (unmounted) {
-          return
+          return;
         }
         window.roamAlphaAPI.ui.components.renderBlock({
           uid,
-          el: ref.current
-        })
-      }, 250)
+          el: ref.current,
+        });
+      }, 250);
 
       return () => {
         unmounted = true;
-      }
+      };
     }
-
-  }, [uid])
-  return <div className={`${ID}-preview`}>
-    <div ref={ref} />
-  </div>
+  }, [uid]);
+  return (
+    <div className={`${ID}-preview`}>
+      <div ref={ref} />
+    </div>
+  );
 }
 
-const ID = "rm-switches"
+const ID = "rm-switches";
 export function initExtension(extensionAPI: RoamExtensionAPI) {
   let roamEl = document.querySelector(".roam-app");
-  let el = document.querySelector("#" + ID)
+  let el = document.querySelector("#" + ID);
   if (el) {
     el.parentElement.removeChild(el);
   }
@@ -1238,15 +1369,15 @@ export function initExtension(extensionAPI: RoamExtensionAPI) {
   ReactDOM.render(<App extensionAPI={extensionAPI} />, el);
   extension_helper.on_uninstall(() => {
     roamEl.removeChild(el);
-  })
-  initSwitchBetweenSidebarAndMain(extensionAPI)
+  });
+  initSwitchBetweenSidebarAndMain(extensionAPI);
 }
 
 function flatTree(node: TreeNode3) {
-  console.log(node, ' = node')
+  console.log(node, " = node");
   const lineBlocks: TreeNode3[] = [];
-  const blocks: TreeNode3[] = []
-  const taggedBlocks: TreeNode3[] = []
+  const blocks: TreeNode3[] = [];
+  const taggedBlocks: TreeNode3[] = [];
 
   const flat = (_node: TreeNode2, deep: string, deepInt: number) => {
     // lineMode.set(deep, _node);
@@ -1257,27 +1388,30 @@ function flatTree(node: TreeNode3) {
       _node.text = replacedString;
       taggedBlocks.push({
         ..._node,
-        tags: _node.refs.map(ref => {
+        tags: _node.refs.map((ref) => {
           // console.log(ref, ' = ref')
-          return { text: (ref.title || ref.string) as unknown as string, type: ref.title ? 'page' : 'block' }
-        })
-      })
+          return {
+            text: (ref.title || ref.string) as unknown as string,
+            type: ref.title ? "page" : "block",
+          };
+        }),
+      });
     }
     _node.children?.forEach((childNode, index) => {
-      flat(childNode, deep + '.' + (index + 1), deepInt + 1)
-    })
-  }
-
+      flat(childNode, deep + "." + (index + 1), deepInt + 1);
+    });
+  };
 
   node.children?.forEach((childNode, index) => {
-    flat(childNode, (index + 1) + '', 0)
-  })
+    flat(childNode, index + 1 + "", 0);
+  });
   return [lineBlocks, blocks, taggedBlocks] as const;
 }
 
-
-
-export function replaceBlockReference(source: string, refs: { string?: string, title?: string, uid: string }[]) {
+export function replaceBlockReference(
+  source: string,
+  refs: { string?: string; title?: string; uid: string }[]
+) {
   const refReg = /(\()([^\{\}\s\)\(]{9,})?\)/gi;
   let lastIndex = 0;
   let result = "";
@@ -1293,7 +1427,7 @@ export function replaceBlockReference(source: string, refs: { string?: string, t
     }
     lastIndex = refReg.lastIndex;
     // console.log(match, result, lastIndex, source);
-    const found = refs.find(r => r.uid === match[2]);
+    const found = refs.find((r) => r.uid === match[2]);
     result += found?.string || found?.title || match[2];
   }
   // console.log(source, " -- source");
@@ -1313,59 +1447,62 @@ function getRefStringByUid(uid: string) {
 }
 
 function getPageTitleByUid(uid: string) {
-  const block = window.roamAlphaAPI.pull("[:node/title]", [
-    ":block/uid",
-    uid,
-  ]);
+  const block = window.roamAlphaAPI.pull("[:node/title]", [":block/uid", uid]);
   return block ? block[":node/title"] : "";
 }
 
 function getStringByUid(uid: string) {
-  return getPageTitleByUid(uid) || getRefStringByUid(uid)
+  return getPageTitleByUid(uid) || getRefStringByUid(uid);
 }
-
 
 function inPageCheck() {
   if (!window.location.href.includes("/page/")) {
-    toast.show({
-      message: 'Switch+ only works in a specific page',
-      intent: 'warning',
-      icon: 'hand',
-    }, 'switch+warning')
-    return true
+    toast.show(
+      {
+        message: "Switch+ only works in a specific page",
+        intent: "warning",
+        icon: "hand",
+      },
+      "switch+warning"
+    );
+    return true;
   }
 }
 
 type ZoomSources = {
-  'lineMode': TreeNode3[],
-  'strMode': TreeNode3[],
-  'tagMode': TreeNode3[],
-  'sidebarMode': SideBarItem[],
-  'changedMode': TreeNode3[]
-}
+  lineMode: TreeNode3[];
+  strMode: TreeNode3[];
+  tagMode: TreeNode3[];
+  sidebarMode: SideBarItem[];
+  changedMode: TreeNode3[];
+};
 
-
-type ZoomState = { uid: string, query: string, sources: ZoomSources, text: string }
+type ZoomState = {
+  uid: string;
+  query: string;
+  sources: ZoomSources;
+  text: string;
+};
 
 const sourceMap = new Map<string, ZoomSources>();
 
 function useZoomStacks() {
-
-  const [stacks, setStacks] = useState<ZoomState[]>([])
-  const [sidebarMode, setSidebarMode] = useState<SideBarItem[]>([])
-  const [parents, setParents] = useState<{ uid: string, text: string, query?: string }[]>([])
+  const [stacks, setStacks] = useState<ZoomState[]>([]);
+  const [sidebarMode, setSidebarMode] = useState<SideBarItem[]>([]);
+  const [parents, setParents] = useState<
+    { uid: string; text: string; query?: string }[]
+  >([]);
 
   const getSourceByUid = (uid: string) => {
-
     const flatted = flatTree(api.getCurrentPageFullTreeByUid(uid));
     return {
-      lineMode: flatted[1].filter(item => item.text),
-      strMode: flatted[1].filter(item => item.text),
-      tagMode: flatted[2].filter(item => item.text),
+      lineMode: flatted[1].filter((item) => item.text),
+      strMode: flatted[1].filter((item) => item.text),
+      tagMode: flatted[2].filter((item) => item.text),
       sidebarMode: [] as SideBarItem[], // getSidebarModeData(),
-      changedMode: api.getAllChangesWithin2Day()
-    }
-  }
+      changedMode: api.getAllChangesWithin2Day(),
+    };
+  };
 
   const result = {
     clean() {
@@ -1373,71 +1510,73 @@ function useZoomStacks() {
     },
     async open(uid: string, text: string) {
       sourceMap.clear();
-      return result.zoomIn(uid, text)
+      return result.zoomIn(uid, text);
     },
     async zoomIn(uid: string, text?: string) {
       const parents = getParentsStrFromBlockUid(uid);
       const source = getSourceByUid(uid);
       sourceMap.set(uid, source);
-      setParents(prevParents => {
-        return parents.map(parent => {
+      setParents((prevParents) => {
+        return parents.map((parent) => {
           return {
             ...parent,
-            query: prevParents.find(pItem => pItem.uid === parent.uid)?.query || ''
-          }
-        })
+            query:
+              prevParents.find((pItem) => pItem.uid === parent.uid)?.query ||
+              "",
+          };
+        });
       });
     },
     changeQuery(query: string) {
-      setParents(prev => {
+      setParents((prev) => {
         prev[prev.length - 1].query = query;
-        return [...prev]
-      })
+        return [...prev];
+      });
     },
     zoomOut() {
       if (parents.length <= 1) {
-        return
+        return;
       }
-      console.log('zoom out: ', stacks)
+      console.log("zoom out: ", stacks);
       // const newParents = parents.slice(0, stacks.length - 1)
       parents.pop();
-      result.zoomIn(parents[parents.length - 1].uid)
+      result.zoomIn(parents[parents.length - 1].uid);
     },
     changeSidebarMode(data: SideBarItem[]) {
-      setSidebarMode(data)
+      setSidebarMode(data);
     },
     currentStack() {
-      const cur = parents[parents.length - 1]
+      const cur = parents[parents.length - 1];
 
       if (!sourceMap.has(cur?.uid)) {
         return {
-          query: '',
+          query: "",
           sources: {
             lineMode: [],
             strMode: [],
             tagMode: [],
             sidebarMode: [] as SideBarItem[], // getSidebarModeData(),
-            changedMode: []
-          } as ZoomSources
-        }
+            changedMode: [],
+          } as ZoomSources,
+        };
       }
 
-      console.log(cur, ' = cur')
+      console.log(cur, " = cur");
       return {
-        query: cur.query || '',
+        query: cur.query || "",
         sources: {
           ...sourceMap.get(cur.uid),
-          sidebarMode: sidebarMode
-        }
-      }
+          sidebarMode: sidebarMode,
+        },
+      };
     },
     get stacks() {
-      return parents
+      return parents;
     },
     zoomTo(uid: string) {
-      result.zoomIn(uid)
-    }
-  }
+      result.zoomIn(uid);
+    },
+  };
 
   return result;
 }
