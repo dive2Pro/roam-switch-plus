@@ -25,6 +25,7 @@ import {
   doSwitch,
   initSwitchBetweenSidebarAndMain,
 } from "./initSwitchBetweenSidebarAndMain";
+import { highlightText, SwitchResultItem } from "./components/SwitchResultItem";
 
 const delay = (ms?: number) =>
   new Promise((resolve) => {
@@ -37,12 +38,12 @@ type TreeNode2 = Omit<TreeNode, "children"> & {
   refs?: { string?: string; uid: string; title?: string }[];
   time: number;
 };
-type TreeNode3 = Omit<TreeNode2, "refs" | "chilren"> & {
+export type TreeNode3 = Omit<TreeNode2, "refs" | "chilren"> & {
   tags: { type: "page" | "block"; text: string }[];
   string?: string;
 };
 
-type SideBarItem = {
+export type SideBarItem = {
   "collapsed?": boolean;
   order: number;
   "pinned?": boolean;
@@ -307,40 +308,6 @@ function escapeRegExpChars(text: string) {
   return text.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
 }
 
-function highlightText(text: string, query: string) {
-  if (!text) {
-    return text;
-  }
-  let lastIndex = 0;
-  const words = query
-    .split(/\s+/)
-    .filter((word) => word.length > 0)
-    .map(escapeRegExpChars);
-  if (words.length === 0) {
-    return [text];
-  }
-  const regexp = new RegExp(words.join("|"), "gi");
-  const tokens: React.ReactNode[] = [];
-  while (true) {
-    const match = regexp.exec(text);
-    if (!match) {
-      break;
-    }
-    const length = match[0].length;
-    const before = text.slice(lastIndex, regexp.lastIndex - length);
-    if (before.length > 0) {
-      tokens.push(before);
-    }
-    lastIndex = regexp.lastIndex;
-    tokens.push(<strong key={lastIndex}>{match[0]}</strong>);
-  }
-  const rest = text.slice(lastIndex);
-  if (rest.length > 0) {
-    tokens.push(rest);
-  }
-  return tokens;
-}
-
 type PassProps = {
   itemPredicate?: (query: string, item: unknown) => boolean;
   items: (v: any) => (TreeNode3 | SideBarItem)[];
@@ -348,14 +315,14 @@ type PassProps = {
   onItemSelect?: (v: any) => void;
 };
 
-type RightMenuType =
+export type RightMenuType =
   | "top"
   | "right"
   | "bottom"
   | "switch"
   | "remove"
   | "switch-swap";
-type OnRightMenuClick2 = (
+export type OnRightMenuClick2 = (
   item: SideBarItem | TreeNode3,
   type: RightMenuType,
   e: React.MouseEvent<HTMLElement>
@@ -788,18 +755,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             }}
             {...itemProps.modifiers}
             text={
-              <div
-                className={`switch-result-item ${
-                  itemProps.modifiers.active ? "switch-result-item-active" : ""
-                }`}
-              >
-                <span className="rm-bullet__inner" />
-                <div className="ellipsis">{highlightText(item.text, str)}</div>
-
-                <RightMenu
-                  onClick={(type, e) => onRightMenuClick(item, type, e)}
-                />
-              </div>
+              <SwitchResultItem
+                item={item}
+                itemProps={itemProps}
+                query={str}
+                onRightMenuClick={onRightMenuClick}
+              />
             }
             onClick={(e) => {
               if (e.shiftKey) {
@@ -1540,6 +1501,10 @@ function Hints(props: { total: number; filtered: number }) {
     <div className={`${ID}-hints`}>
       <span>
         {props.filtered}/{props.total} total
+      </span>
+      <span>
+        <span className="hint-icon">Tab</span>
+        <span> zoom in/out </span>
       </span>
       <span>
         <span className="hint-icon">@:</span>
