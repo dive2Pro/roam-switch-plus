@@ -456,6 +456,91 @@ const isFetchAgainIn5Seconds = () => {
 };
 
 let AppIsOpen = false;
+
+// 模式选项
+const modeOptions: Array<{
+  value: string;
+  label: string;
+  icon: IconName;
+  hint: string;
+}> = [
+  { value: "", label: "Default", icon: "document", hint: "" },
+  { value: ":", label: "Line Mode", icon: "list", hint: "" },
+  { value: "@:", label: "Tag Mode", icon: "tag", hint: "" },
+  {
+    value: "r:",
+    label: "Sidebar Mode",
+    icon: "panel-stats",
+    hint: "",
+  },
+  {
+    value: "e:",
+    label: "Recent Edits",
+    icon: "time",
+    hint: "changes in 48 hours",
+  },
+];
+
+// 模式选择器组件
+const ModeSelector: FC<{
+  mode: string;
+  modeSelectorOpen: boolean;
+  setModeSelectorOpen: (open: boolean) => void;
+  resetInputWithMode: (nextMode: string) => Promise<void>;
+  inputRef: React.RefObject<HTMLInputElement>;
+}> = ({
+  mode,
+  modeSelectorOpen,
+  setModeSelectorOpen,
+  resetInputWithMode,
+  inputRef,
+}) => {
+  const currentModeOption =
+    modeOptions.find((opt) => opt.value === mode) || modeOptions[0];
+
+  return (
+    <Popover
+      isOpen={modeSelectorOpen}
+      onInteraction={(nextOpenState) => setModeSelectorOpen(nextOpenState)}
+      content={
+        <Menu>
+          {modeOptions.map((option) => (
+            <MenuItem
+              key={option.value}
+              icon={option.value === mode ? "tick" : option.icon}
+              text={option.label}
+              active={option.value === mode}
+              labelElement={
+                option.hint ? (
+                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
+                    <span> {option.hint}</span>
+                  </span>
+                ) : undefined
+              }
+              onClick={async () => {
+                setModeSelectorOpen(false);
+                await resetInputWithMode(option.value);
+                inputRef.current?.focus();
+              }}
+            />
+          ))}
+        </Menu>
+      }
+      position={Position.BOTTOM_LEFT}
+      minimal
+    >
+      <Button
+        icon={currentModeOption.icon}
+        minimal
+        small
+        text={mode === "" ? currentModeOption.label : undefined}
+        rightIcon="caret-down"
+        onClick={() => setModeSelectorOpen(!modeSelectorOpen)}
+      />
+    </Popover>
+  );
+};
+
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
   const [mode, setMode] = useState<string>("");
@@ -1121,62 +1206,80 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   console.log(query, passProps, itemsSource);
   const isRightSidebarMode = mode === "r:";
 
-  // 模式选项
-  const modeOptions: Array<{ value: string; label: string; icon: IconName }> = [
-    { value: "", label: "默认", icon: "document" },
-    { value: ":", label: "行模式", icon: "list" },
-    { value: "@:", label: "标签模式", icon: "tag" },
-    { value: "r:", label: "侧边栏模式", icon: "panel-stats" },
-    { value: "e:", label: "最近编辑", icon: "time" },
-  ];
+  // 切换模式（用于键盘导航）
+  const switchMode = (direction: "up" | "down") => {
+    console.log(mode, " = mode switchMode");
+    const currentIndex = modeOptions.findIndex((opt) => opt.value === mode);
+    let nextIndex: number;
 
-  // 获取当前模式
-  const getCurrentMode = () => {
-    return mode;
+    if (direction === "down") {
+      nextIndex = (currentIndex + 1) % modeOptions.length;
+    } else {
+      nextIndex = currentIndex - 1;
+      if (nextIndex < 0) {
+        nextIndex = modeOptions.length - 1;
+      }
+    }
+
+    const nextMode = modeOptions[nextIndex].value;
+    resetInputWithMode(nextMode);
   };
 
-  // 模式选择器组件
-  const ModeSelector = () => {
-    const currentMode = getCurrentMode();
-    const currentModeOption =
-      modeOptions.find((opt) => opt.value === currentMode) || modeOptions[0];
+  // 当模式选择器打开时，使用 window 级别的键盘监听
+  useEffect(() => {
+    if (!modeSelectorOpen) {
+      return;
+    }
 
-    return (
-      <Popover
-        isOpen={modeSelectorOpen}
-        onInteraction={(nextOpenState) => setModeSelectorOpen(nextOpenState)}
-        content={
-          <Menu>
-            {modeOptions.map((option) => (
-              <MenuItem
-                key={option.value}
-                icon={option.value === currentMode ? "tick" : option.icon}
-                text={option.label}
-                onClick={async () => {
-                  setModeSelectorOpen(false);
-                  await resetInputWithMode(option.value);
-                  inputRef.current?.focus();
-                }}
-              />
-            ))}
-          </Menu>
-        }
-        position={Position.BOTTOM_LEFT}
-        minimal
-      >
-        <Button
-          icon={currentModeOption.icon}
-          minimal
-          small
-          text={currentModeOption.label}
-          rightIcon="caret-down"
-          onClick={() => setModeSelectorOpen(!modeSelectorOpen)}
-        />
-      </Popover>
-    );
-  };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 上下键切换模式
+      if (
+        (e.key === "ArrowUp" || e.key === "ArrowDown") &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        switchMode(e.key === "ArrowDown" ? "down" : "up");
+        return;
+      }
+      // Escape 键关闭模式选择器
+      if (
+        e.key === "Escape" &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setModeSelectorOpen(false);
+        inputRef.current?.focus();
+        return;
+      }
+      // Enter 键确认选择并关闭
+      if (
+        e.key === "Enter" &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setModeSelectorOpen(false);
+        inputRef.current?.focus();
+        return;
+      }
+    };
 
-  console.log({ query }, " = query 222");
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [modeSelectorOpen, mode]);
 
   return (
     <div>
@@ -1186,7 +1289,15 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         scrollToActiveItem
         activeItem={activeItem}
         inputProps={{
-          leftElement: <ModeSelector />,
+          leftElement: (
+            <ModeSelector
+              mode={mode}
+              modeSelectorOpen={modeSelectorOpen}
+              setModeSelectorOpen={setModeSelectorOpen}
+              resetInputWithMode={resetInputWithMode}
+              inputRef={inputRef}
+            />
+          ),
           inputRef: inputRef,
           placeholder: "",
           onBlur() {
@@ -1206,6 +1317,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               setModeSelectorOpen(true);
               return;
             }
+
             // 如果光标在第一位时按删除键，则回到普通模式
             if (
               e.key === "Backspace" &&
@@ -1283,6 +1395,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           if (!_activeItem) {
             return;
           }
+          if (modeSelectorOpen) {
+            return;
+          }
 
           // right side bar mode
           if ("dom" in _activeItem) {
@@ -1295,13 +1410,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           if (selected.current || refs.current.isClosing || AppIsOpen) {
             return;
           }
-
-          console.log(
-            activeItem,
-            " --active change-- ",
-            _activeItem,
-            AppIsOpen
-          );
           setActiveItemByItem(_activeItem);
         }}
         resetOnQuery
@@ -1410,23 +1518,6 @@ function Hints(props: { total: number; filtered: number }) {
     <div className={`${ID}-hints`}>
       <span>
         {props.filtered}/{props.total} total
-      </span>
-
-      <span>
-        <span className="hint-icon">@</span>
-        <span> refs mode </span>
-      </span>
-      <span>
-        <span className="hint-icon">:</span>
-        <span> lines mode </span>
-      </span>
-      <span>
-        <span className="hint-icon">r:</span>
-        <span> right sidebar mode </span>
-      </span>
-      <span>
-        <span className="hint-icon">e:</span>
-        <span> changes in 48 hours </span>
       </span>
     </div>
   );
