@@ -304,10 +304,6 @@ const api = {
   },
 };
 
-function escapeRegExpChars(text: string) {
-  return text.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
-}
-
 type PassProps = {
   itemPredicate?: (query: string, item: unknown) => boolean;
   items: (v: any) => (TreeNode3 | SideBarItem)[];
@@ -431,7 +427,7 @@ const modeOptions: Array<{
   icon: IconName;
   hint: string;
 }> = [
-  { value: "", label: "Default", icon: "document", hint: "" },
+  { value: "", label: "Default", icon: "search", hint: "" },
   { value: "l:", label: "Line Mode", icon: "list", hint: "" },
   { value: "@:", label: "Tag Mode", icon: "tag", hint: "" },
   {
@@ -1260,7 +1256,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
             />
           ),
           inputRef: inputRef,
-          placeholder: "",
+          placeholder: "Search...",
           onBlur() {
             // console.log(" blur")
           },
@@ -1412,41 +1408,45 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
           return (
             <div>
-              {zoomStacks.stacks.length <= -1 ? null : (
-                <div>
-                  <div className="rm-zoom zoom-path-view">
-                    {zoomStacks.stacks.map((stack, index, arr) => {
-                      return (
-                        <div
-                          className="rm-zoom-item"
-                          style={{ position: "relative" }}
-                          onClick={() => {
-                            zoomStacks.zoomTo(stack.uid);
-                          }}
-                        >
-                          <span className="rm-zoom-item-content">
-                            {stack.text}
-                          </span>
-                          {index !== arr.length - 1 ? (
-                            <Icon icon="chevron-right" />
-                          ) : null}
-                          {index === arr.length - 1 ? (
+              <div className="zoom-stack-container">
+                <Tooltip
+                  content={<span>click or use Shift+Tab to zoom in/out</span>}
+                >
+                  {zoomStacks.stacks.length <= -1 ? null : (
+                    <div>
+                      <div className="rm-zoom zoom-path-view">
+                        {zoomStacks.stacks.map((stack, index, arr) => {
+                          return (
                             <div
-                              style={{
-                                position: "absolute",
-                                display: "flex",
-                                inset: 0,
+                              className="rm-zoom-item"
+                              style={{ position: "relative" }}
+                              onClick={() => {
+                                zoomStacks.zoomTo(stack.uid);
                               }}
                             >
-                              <div className="rm-zoom-mask" />
+                              <span className="rm-zoom-item-content">
+                                {stack.text}
+                              </span>
+                              <Icon icon="chevron-right" />
+                              {index === arr.length - 1 ? (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    display: "flex",
+                                    inset: 0,
+                                  }}
+                                >
+                                  <div className="rm-zoom-mask" />
+                                </div>
+                              ) : null}
                             </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </Tooltip>
+              </div>
               <div className="flex" style={{ maxHeight: 500 }}>
                 <Menu>
                   <Virtuoso
@@ -1504,10 +1504,7 @@ function Hints(props: { total: number; filtered: number }) {
       <span>
         {props.filtered}/{props.total} total
       </span>
-      <span>
-        <span className="hint-icon">Tab</span>
-        <span> zoom in/out </span>
-      </span>
+
       <span>
         <span className="hint-icon">@:</span>
         <span> refs mode </span>

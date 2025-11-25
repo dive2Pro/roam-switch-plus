@@ -1,5 +1,11 @@
 .rm-switches {
-
+    &.bp3-omnibar {
+        border-radius: 12px;
+    }
+    a.bp3-active.bp3-menu-item {
+        background-color: #7cccff33;
+        color: inherit;
+    }
     .shadowTop() {
         box-shadow+: 0px -1px 0px 0px #d2cdcd;
     }
@@ -40,6 +46,17 @@
     button:focus {
         outline: none;
     }
+    .zoom-stack-container {
+        padding: 6px ;
+        display: flex;
+        gap: 8px;
+        .rm-zoom-item {
+            color: #999999;
+        }
+        .bp3-icon {
+            color: inherit
+        }
+    }
 
     .zoom-path-view {
         margin-bottom: 0px;
@@ -55,7 +72,9 @@
         white-space: initial;
         position: relative;
         display: flex;
-
+        strong {
+            background-color: var(--highlight-color);
+        }
         &.tag-mode {
             flex-wrap: wrap;
             gap: 4px;
@@ -94,7 +113,7 @@
             top: 2px;
             font-size: 70%;
         }
-
+       
         &:hover {
             .right-menu {
                 opacity: 1;
@@ -115,6 +134,8 @@
         .rm-bullet__inner {
             margin-top: 4px;
             margin-right: 2px;
+            min-width: 5px;
+            min-height: 5px;
         }
 
         .ellipsis {
@@ -142,7 +163,7 @@
         // border-top-left-radius: 10px;
         padding-top: 20px;
         padding-right: 10px;
-        margin: 0 20px;
+        // margin: 0 20px;
 
         .rm-block-separator {
             display: none;
@@ -154,7 +175,7 @@
         .rm-page-ref--tag {
             color: #A7B6C2;
         }
-
+        
     }
 
     .bp3-menu {
