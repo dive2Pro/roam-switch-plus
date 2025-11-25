@@ -520,7 +520,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     isClosing: false,
   });
   refs.current.query = query;
-  console.log(query, " = query");
+  console.log({ mode }, " = query");
 
   const getSidebarModeData = async () => {
     console.time("Sidebar");
@@ -604,7 +604,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           await initData();
         }
         open();
-        resetInputWithMode("");
       },
     });
     props.extensionAPI.ui.commandPalette.addCommand({
@@ -1041,7 +1040,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     madeActiveItemChange(item);
   }
 
-  console.log(sources, " ---@");
   const itemsSource = passProps.items(sources);
 
   const findActiveItem = useEvent(async () => {
@@ -1318,7 +1316,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               }
               return;
             }
-            console.log(e.key, e.shiftKey, activeItem, "_______");
+
             if (e.key === "Tab") {
               if (e.shiftKey) {
                 zoomStacks.zoomOut();
@@ -1331,7 +1329,6 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           },
         }}
         onClose={(e) => {
-          // console.log(e, e.type, ' ----@type')
           onDialogClose();
         }}
         onItemSelect={async (item: TreeNode3 | SideBarItem, e) => {
@@ -1464,9 +1461,14 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                     }}
                   />
                 </Menu>
-                {isRightSidebarMode ? null : activeItem?.uid ? (
-                  <Preview uid={activeItem?.uid} key={activeItem?.uid} />
-                ) : null}
+                <Preview
+                  uid={
+                    itemListProps.filteredItems.length > 0
+                      ? activeItem?.uid
+                      : undefined
+                  }
+                  key={activeItem?.uid}
+                />
               </div>
               <Hints
                 total={itemListProps.items.length}
@@ -1516,7 +1518,7 @@ function Hints(props: { total: number; filtered: number }) {
       </span>
       <span>
         <span className="hint-icon">r:</span>
-        <span> right sidebar mode </span>
+        <span> sidebar mode </span>
       </span>
       <span>
         <span className="hint-icon">e:</span>
@@ -1528,6 +1530,7 @@ function Hints(props: { total: number; filtered: number }) {
 
 function Preview({ uid }: { uid: string }) {
   const ref = useRef<HTMLDivElement>();
+  console.log(uid, " = preview uid");
   useEffect(() => {
     let unmounted = false;
     if (uid) {
@@ -1544,7 +1547,14 @@ function Preview({ uid }: { uid: string }) {
       return () => {
         unmounted = true;
       };
+    } else {
+      // @ts-ignore
+      window.roamAlphaAPI.ui.components.unmountNode({
+        uid,
+        el: ref.current,
+      });
     }
+    return () => {};
   }, [uid]);
   return (
     <div className={`${ID}-preview`}>
