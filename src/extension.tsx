@@ -10,6 +10,8 @@ import {
   Toaster,
   Tooltip,
   Icon,
+  Popover,
+  Position,
 } from "@blueprintjs/core";
 import { IItemRendererProps, ItemRenderer, Omnibar } from "@blueprintjs/select";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
@@ -145,16 +147,16 @@ const api = {
           outline: "application",
         };
         const dom = parentEl.children[index] as HTMLDivElement;
-        // @ts-ignore
         if (
+          // @ts-ignore
           sidebarItemWindow.type === "search-query" ||
           sidebarItemWindow.type === "graph" ||
           sidebarItemWindow.type === "mentions"
         ) {
-          // @ts-ignore
-          title =
+          title = (
             dom.querySelector(".rm-sidebar-window").firstElementChild
-              .children[1].innerText;
+              .children[1] as HTMLDivElement
+          ).innerText;
         } else {
           if (sidebarItemWindow.type === "block") {
             title = window.roamAlphaAPI.q(
@@ -1101,9 +1103,69 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const filteredItems = useRef<(TreeNode3 | SideBarItem)[]>([]);
+  const [modeSelectorOpen, setModeSelectorOpen] = useState(false);
   let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => {};
   console.log(query, passProps, itemsSource);
   const isRightSidebarMode = query.startsWith("r:");
+
+  // 模式选项
+  const modeOptions: Array<{ value: string; label: string; icon: IconName }> = [
+    { value: "", label: "默认", icon: "document" },
+    { value: ":", label: "行模式", icon: "list" },
+    { value: "@", label: "标签模式", icon: "tag" },
+    { value: "r:", label: "侧边栏模式", icon: "panel-stats" },
+    { value: "e:", label: "最近编辑", icon: "time" },
+  ];
+
+  // 获取当前模式
+  const getCurrentMode = () => {
+    const currentMode = Object.keys(modes).find((mode) => {
+      return query.startsWith(mode);
+    });
+    return currentMode || "";
+  };
+
+  // 模式选择器组件
+  const ModeSelector = () => {
+    const currentMode = getCurrentMode();
+    const currentModeOption =
+      modeOptions.find((opt) => opt.value === currentMode) || modeOptions[0];
+
+    return (
+      <Popover
+        isOpen={modeSelectorOpen}
+        onInteraction={(nextOpenState) => setModeSelectorOpen(nextOpenState)}
+        content={
+          <Menu>
+            {modeOptions.map((option) => (
+              <MenuItem
+                key={option.value}
+                icon={option.value === currentMode ? "tick" : option.icon}
+                text={option.label}
+                onClick={async () => {
+                  setModeSelectorOpen(false);
+                  await resetInputWithMode(option.value);
+                  inputRef.current?.focus();
+                }}
+              />
+            ))}
+          </Menu>
+        }
+        position={Position.BOTTOM_LEFT}
+        minimal
+      >
+        <Button
+          icon={currentModeOption.icon}
+          minimal
+          small
+          text={currentModeOption.label}
+          rightIcon="caret-down"
+          onClick={() => setModeSelectorOpen(!modeSelectorOpen)}
+        />
+      </Popover>
+    );
+  };
+
   return (
     <div>
       <Omnibar<TreeNode3 | SideBarItem>
@@ -1112,13 +1174,26 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         scrollToActiveItem
         activeItem={activeItem}
         inputProps={{
-          leftElement: <Icon icon="search" />,
+          leftElement: <ModeSelector />,
           inputRef: inputRef,
           placeholder: "",
           onBlur() {
             // console.log(" blur")
           },
           onKeyDownCapture(e) {
+            // 检测 "/" 键，打开模式选择器
+            if (
+              e.key === "/" &&
+              !e.shiftKey &&
+              !e.ctrlKey &&
+              !e.metaKey &&
+              !e.altKey
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              setModeSelectorOpen(true);
+              return;
+            }
             // 侧边栏模式不进去.
             if (activeItem && "dom" in activeItem) {
               if (e.key === "Tab") {
