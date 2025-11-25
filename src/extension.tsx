@@ -458,6 +458,7 @@ const isFetchAgainIn5Seconds = () => {
 let AppIsOpen = false;
 function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [isOpen, setOpen] = useState(false);
+  const [mode, setMode] = useState<string>("");
   // const [query, setQuery] = useState("");
   const zoomStacks = useZoomStacks();
   const { query, sources } = zoomStacks.currentStack();
@@ -527,19 +528,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   };
 
   const resetInputWithMode = async (nextMode: string) => {
-    const value = inputRef.current?.value || "";
-    const modeName = Object.keys(modes).find((mode) => {
-      return value.startsWith(mode);
-    });
-    let query = `${nextMode}${value}`;
-    if (modeName) {
-      query = nextMode + value.substring(modeName.length);
-    }
+    setMode(nextMode);
     setActiveItem(undefined);
-    handleQueryChange(query);
+    // 保持当前的 query 值不变，只更新 mode
     findActiveItem();
     await delay(100);
-    inputRef.current.setSelectionRange(nextMode.length, query.length);
+    inputRef.current?.focus();
   };
   const openSidebar = async () => {
     await api.openRightsidebar();
@@ -785,7 +779,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
         },
       };
     },
-    "@": (str) => {
+    "@:": (str) => {
       return {
         itemPredicate(query, item: TreeNode3) {
           return item.tags.some((ref) =>
@@ -1082,23 +1076,42 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   };
 
   const [activeItem, setActiveItem] = useState<TreeNode3 | SideBarItem>();
-  async function handleQueryChange(_query: string) {
-    const tag = Object.keys(modes).find((mode) => {
-      if (_query.startsWith(mode)) {
-        return true;
-      }
-      return false;
-    });
 
-    // console.log('handle query change: ', query, tag)
-    if (tag === "r:" && !query.startsWith("r:")) {
-      await openSidebar();
+  // 当 mode 改变时，更新 passProps
+  useEffect(() => {
+    if (mode === "r:") {
+      openSidebar();
     }
-    const fn = modes[tag] || defaultFn;
-    const str = modes[tag] ? _query.substring(tag.length) : _query;
-    setPassProps(fn(str.trim()));
-    // setQuery(_query)
-    zoomStacks.changeQuery(_query);
+    const fn = modes[mode] || defaultFn;
+    setPassProps(fn(query.trim()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  async function handleQueryChange(_query: string) {
+    // 检测 query 是否以某个 mode 开头，如果匹配则切换 mode
+    // 按长度降序排列，先匹配较长的 mode（如 "r:"、"e:"、"s:"），再匹配较短的（如 ":"、"@"）
+    const modeKeys = Object.keys(modes).sort((a, b) => b.length - a.length);
+    const matchedMode = modeKeys.find((modeKey) => _query.startsWith(modeKey));
+
+    let actualQuery = _query;
+    let currentMode = mode;
+    let modeChanged = false;
+
+    // 如果匹配到 mode 且与当前 mode 不同，则切换 mode 并保留非 mode 关键字的内容
+    if (matchedMode && matchedMode !== currentMode) {
+      currentMode = matchedMode;
+      setMode(matchedMode);
+      actualQuery = _query.substring(matchedMode.length); // 保留移除 mode 前缀后的内容
+      modeChanged = true;
+    }
+
+    // console.log('handle query change: ', actualQuery, currentMode)
+    const fn = modes[currentMode] || defaultFn;
+    // query 不再包含 mode 前缀，直接使用
+    setPassProps(fn(actualQuery.trim()));
+    // setQuery(actualQuery)
+    console.log({ _query, actualQuery, currentMode, modeChanged }, " = query");
+    zoomStacks.changeQuery(actualQuery);
   }
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -1106,23 +1119,20 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const [modeSelectorOpen, setModeSelectorOpen] = useState(false);
   let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => {};
   console.log(query, passProps, itemsSource);
-  const isRightSidebarMode = query.startsWith("r:");
+  const isRightSidebarMode = mode === "r:";
 
   // 模式选项
   const modeOptions: Array<{ value: string; label: string; icon: IconName }> = [
     { value: "", label: "默认", icon: "document" },
     { value: ":", label: "行模式", icon: "list" },
-    { value: "@", label: "标签模式", icon: "tag" },
+    { value: "@:", label: "标签模式", icon: "tag" },
     { value: "r:", label: "侧边栏模式", icon: "panel-stats" },
     { value: "e:", label: "最近编辑", icon: "time" },
   ];
 
   // 获取当前模式
   const getCurrentMode = () => {
-    const currentMode = Object.keys(modes).find((mode) => {
-      return query.startsWith(mode);
-    });
-    return currentMode || "";
+    return mode;
   };
 
   // 模式选择器组件
@@ -1166,6 +1176,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     );
   };
 
+  console.log({ query }, " = query 222");
+
   return (
     <div>
       <Omnibar<TreeNode3 | SideBarItem>
@@ -1192,6 +1204,22 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
               e.preventDefault();
               e.stopPropagation();
               setModeSelectorOpen(true);
+              return;
+            }
+            // 如果光标在第一位时按删除键，则回到普通模式
+            if (
+              e.key === "Backspace" &&
+              inputRef.current &&
+              inputRef.current.selectionStart === 0 &&
+              mode !== "" &&
+              !e.shiftKey &&
+              !e.ctrlKey &&
+              !e.metaKey &&
+              !e.altKey
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              setMode("");
               return;
             }
             // 侧边栏模式不进去.
@@ -1228,7 +1256,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
           const shiftKeyPressed = (e as any).shiftKey;
           changeSelected(!shiftKeyPressed);
           onDialogClose();
-          if (query.startsWith("e:")) {
+          if (mode === "e:") {
           }
           // if (!await focusOnItem(item)) {
           api.selectingBlockByUid(item.uid, shiftKeyPressed);
@@ -1636,7 +1664,6 @@ function useZoomStacks() {
         };
       }
 
-      console.log(cur, " = cur");
       return {
         query: cur.query || "",
         sources: {
