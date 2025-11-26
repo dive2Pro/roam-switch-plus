@@ -1291,6 +1291,8 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
 
             // 如果光标在第一位时按删除键，则回到普通模式
             if (
+              inputRef.current.selectionStart ===
+                inputRef.current.selectionEnd &&
               e.key === "Backspace" &&
               inputRef.current &&
               inputRef.current.selectionStart === 0 &&
