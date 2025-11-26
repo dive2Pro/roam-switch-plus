@@ -797,7 +797,9 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                                }
                                `}
                 >
-                  <div className="deep">{highlightText(item.deep, str)}</div>
+                  <div className="deep highlight-text">
+                    {highlightText(item.deep, str)}
+                  </div>
                   <div className="ellipsis">{item.text}</div>
                   <RightMenu
                     onClick={(type, e) => onRightMenuClick(item, type, e)}
@@ -975,7 +977,11 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                 fill
                 minimal
                 alignText="left"
-                text={highlightText(item.string, str)}
+                text={
+                  <div className="highlight-text">
+                    {highlightText(item.string, str)}
+                  </div>
+                }
                 rightIcon={
                   <div className="right-menu">
                     <Tooltip content={<span>Open in sidebar</span>}>
