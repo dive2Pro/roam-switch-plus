@@ -123,9 +123,9 @@ function init() {
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.type === "childList") {
-        console.log("Child list changed");
-        console.log(mutation.addedNodes); // list of added nodes
-        console.log(mutation.removedNodes); // list of removed nodes
+        // console.log("Child list changed");
+        // console.log(mutation.addedNodes); // list of added nodes
+        // console.log(mutation.removedNodes); // list of removed nodes
         mutation.addedNodes.forEach((node) => {
           if ((node as Element).querySelector(".rm-sidebar-window")) {
             main();

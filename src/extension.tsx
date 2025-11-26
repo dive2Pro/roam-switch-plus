@@ -516,7 +516,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
     isClosing: false,
   });
   refs.current.query = query;
-  console.log({ mode }, " = query");
+  // console.log({ mode }, " = query");
 
   const getSidebarModeData = async () => {
     console.time("Sidebar");
@@ -847,7 +847,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
                     //   return ref.text.includes(str)
                     // })
                     ?.map((ref) => {
-                      console.log(ref, " ---- tags");
+                      // console.log(ref, " ---- tags");
                       return (
                         <Tag
                           icon={
@@ -1060,7 +1060,7 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
       });
     }, 10);
 
-    console.log("dom; ", item);
+    // console.log("dom; ", item);
   };
 
   // const focusOnItem = async (item: TreeNode3) => {
@@ -1157,12 +1157,12 @@ function App(props: { extensionAPI: RoamExtensionAPI }) {
   const filteredItems = useRef<(TreeNode3 | SideBarItem)[]>([]);
   const [modeSelectorOpen, setModeSelectorOpen] = useState(false);
   let scrollToActiveItem = (item: { uid: string }, immediately: boolean) => {};
-  console.log(query, passProps, itemsSource);
+  // console.log(query, passProps, itemsSource);
   const isRightSidebarMode = mode === "r:";
-
+  console.log(modeSelectorOpen, " = modeSelectorOpen----");
   // 切换模式（用于键盘导航）
   const switchMode = (direction: "up" | "down") => {
-    console.log(mode, " = mode switchMode");
+    // console.log(mode, " = mode switchMode");
     const currentIndex = modeOptions.findIndex((opt) => opt.value === mode);
     let nextIndex: number;
 

@@ -33,13 +33,18 @@ const fileName = {
 };
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [
-    reactPlugin({
-      jsxRuntime: "classic",
-    }),
-    isDev ? undefined : removeConsole(),
-    viteExternalsPlugin({
+export default defineConfig(({ command, mode }) => {
+  const isBuild = command === "build";
+  
+  return {
+    plugins: [
+      reactPlugin({
+        jsxRuntime: "classic",
+      }),
+      isBuild ? removeConsole({
+        includes: ["log", "warn", "error", "info", "debug"],
+      }) : undefined,
+      viteExternalsPlugin({
       "@blueprintjs/core": ["Blueprint", "Core"],
       "@blueprintjs/datetime": ["Blueprint", "DateTime"],
       "@blueprintjs/select": ["Blueprint", "Select"],
@@ -56,28 +61,29 @@ export default defineConfig({
       "react-dom": "ReactDOM",
       "react-dom/client": "ReactDOM",
       tslib: "TSLib",
-    }),
-  ],
-  //   base: "./",
-  //   // Makes HMR available for development
-  base: "./",
+      }),
+    ].filter(Boolean),
+    //   base: "./",
+    //   // Makes HMR available for development
+    base: "./",
 
-  build: {
-    lib: {
-      entry: path.resolve(__dirname, "src/index.tsx"),
-      name: getPackageNameCamelCase(),
-      formats: ["es"],
-      fileName: (format) => fileName[format],
-    },
-    outDir: "./",
-    minify: true,
-    rollupOptions: {
-      output: {
-        assetFileNames: "extension.[ext]",
+    build: {
+      lib: {
+        entry: path.resolve(__dirname, "src/index.tsx"),
+        name: getPackageNameCamelCase(),
+        formats: ["es"],
+        fileName: (format) => fileName[format],
       },
+      outDir: "./",
+      minify: true,
+      rollupOptions: {
+        output: {
+          assetFileNames: "extension.[ext]",
+        },
+      },
+      sourcemap: true,
+      ...build,
     },
-    sourcemap: true,
-    ...build,
-  },
-  logLevel: "error",
+    logLevel: "error",
+  };
 });
